@@ -1,190 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>ADAS-TO Explorer</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uplot@1.6.24/dist/uPlot.min.css">
-<style>
-  :root{
-    --bg:#0e1117; --panel:#161b22; --panel2:#1c232c; --line:#2a3340;
-    --fg:#e6edf3; --muted:#8b949e; --accent:#58a6ff; --warn:#d29922;
-    --danger:#f85149; --ok:#3fb950; --purple:#bc8cff;
-  }
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--fg);
-       font:13px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-  a{color:var(--accent)}
-  .app{display:grid;grid-template-columns:310px 1fr;height:100vh;overflow:hidden}
-
-  /* ---------- sidebar ---------- */
-  aside{background:var(--panel);border-right:1px solid var(--line);
-        display:flex;flex-direction:column;overflow:hidden}
-  .brand{padding:14px 16px;border-bottom:1px solid var(--line)}
-  .brand h1{margin:0;font-size:15px;letter-spacing:.3px}
-  .brand p{margin:4px 0 0;color:var(--muted);font-size:11px}
-  .filters{padding:12px 16px;border-bottom:1px solid var(--line)}
-  .filters label{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;
-                 letter-spacing:.6px;margin:8px 0 3px}
-  select,input{width:100%;background:var(--panel2);color:var(--fg);
-               border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px}
-  .row2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .cliplist{overflow-y:auto;flex:1}
-  .clip{padding:8px 16px;border-bottom:1px solid #1e252e;cursor:pointer;font-size:11px}
-  .clip:hover{background:#1b2029}
-  .clip.active{background:#1f2a3a;border-left:3px solid var(--accent);padding-left:13px}
-  .clip .k{color:var(--fg);font-weight:600}
-  .clip .s{color:var(--muted)}
-  .pill{display:inline-block;padding:1px 6px;border-radius:9px;font-size:9px;
-        background:#22303f;color:#9fc3e8;margin-right:4px}
-  .pill.q{background:#3a2f1a;color:#e0b357}
-  .pill.r{background:#1e3a2a;color:#66d19e}
-
-  /* ---------- main ---------- */
-  main{display:flex;flex-direction:column;overflow:hidden}
-  .top{display:grid;grid-template-columns:minmax(340px,44%) 1fr;gap:14px;
-       padding:14px 16px 10px;border-bottom:1px solid var(--line);flex:0 0 auto}
-  .videowrap{background:#000;border:1px solid var(--line);border-radius:8px;
-             overflow:hidden;position:relative}
-  video{width:100%;display:block;background:#000;aspect-ratio:16/9}
-  .hud{position:absolute;top:8px;left:8px;background:rgba(8,12,18,.78);
-       padding:5px 9px;border-radius:6px;font-size:11px;font-variant-numeric:tabular-nums}
-  .hud b{color:var(--accent)}
-  .scrub{position:relative;height:26px;margin-top:8px;background:var(--panel2);
-         border-radius:5px;overflow:hidden;cursor:pointer;border:1px solid var(--line)}
-  .scrub .seg{position:absolute;top:0;bottom:0}
-  .scrub .eng{background:linear-gradient(180deg,#1f6feb55,#1f6feb22);border-right:1px solid #1f6feb}
-  .scrub .man{background:linear-gradient(180deg,#d2992255,#d2992222)}
-  .scrub .evline{position:absolute;top:0;bottom:0;width:2px;background:var(--danger);left:50%}
-  .scrub .play{position:absolute;top:0;bottom:0;width:2px;background:#fff;left:0}
-  .scrub .lbl{position:absolute;bottom:1px;font-size:9px;color:#c9d1d9;padding-left:4px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
-  .card h2{margin:0 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
-  .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px}
-  .kv .k{color:var(--muted)}
-  .warn{background:#2b2413;border:1px solid #5c4a1a;color:#e3b341;padding:8px 10px;
-        border-radius:6px;font-size:11px;margin-top:10px}
-  .badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600}
-  .charts{overflow-y:auto;padding:10px 16px 40px;flex:1}
-  .panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;
-         margin-bottom:10px;padding:8px 10px 4px}
-  .panel .h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:2px}
-  .panel .h span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px}
-  .panel .h em{font-style:normal;font-size:10px;color:#6e7681}
-  .uplot{font-size:10px}
-  /* stabilise the legend: flex rows + tabular figures so values can't reflow */
-  .u-legend{font-size:10px;font-variant-numeric:tabular-nums}
-  .u-legend table{display:block;border:none}
-  /* Hide the x-series legend row only (tagged via series[0].class). Positional
-     selectors are unsafe: uPlot's legend rows are data series, not axis first. */
-  .u-legend .u-xrow{display:none !important}
-  .u-legend tbody{display:flex;flex-wrap:wrap;gap:2px 12px}
-  .u-legend tr{display:inline-flex;align-items:baseline;border:none}
-  .u-legend th,.u-legend td{border:none;padding:0;background:none}
-  .u-legend .u-label{white-space:nowrap;padding-right:5px;font-weight:500}
-  .u-legend .u-value{white-space:nowrap;text-align:right;min-width:56px;
-                     font-variant-numeric:tabular-nums;color:#c9d1d9}
-  .u-legend .u-marker{width:9px;height:9px;margin-right:4px;border-radius:2px}
-  /* chart layout: one hero panel + a 3x2 grid */
-  .hero{margin-bottom:10px}
-  .grid3x2{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-            gap:10px;align-items:start}
-  @media (max-width:1560px){.grid3x2{grid-template-columns:repeat(2,minmax(0,1fr))}}
-  @media (max-width:1040px){.grid3x2{grid-template-columns:minmax(0,1fr)}}
-  #charts > div,.panel,.panel > div{min-width:0}
-
-  /* ---------- scrollbars: match the app chrome ---------- */
-  *{scrollbar-width:thin;scrollbar-color:#2f3947 transparent}
-  ::-webkit-scrollbar{width:11px;height:11px}
-  ::-webkit-scrollbar-track{background:var(--bg)}
-  ::-webkit-scrollbar-thumb{background:#2f3947;border-radius:6px;
-                            border:2px solid var(--bg)}
-  ::-webkit-scrollbar-thumb:hover{background:#41506b}
-  ::-webkit-scrollbar-corner{background:var(--bg)}
-  button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
-         border-radius:6px;padding:6px 10px;cursor:pointer;font-size:11px}
-  button:hover{border-color:var(--accent)}
-  .muted{color:var(--muted)}
-  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-  .chip{padding:3px 9px;border-radius:11px;font-size:11px;cursor:pointer;
-        background:var(--panel2);border:1px solid var(--line)}
-  .chip.on{background:#1f6feb;border-color:#1f6feb;color:#fff}
-  table.pr{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
-  table.pr td{padding:3px 4px;border-bottom:1px solid #1e252e}
-  table.pr td:last-child{text-align:right;font-variant-numeric:tabular-nums}
-  .bar{height:6px;background:#22303f;border-radius:3px;overflow:hidden}
-  .bar > i{display:block;height:100%;background:var(--accent)}
-  #loading{padding:20px;color:var(--muted)}
-</style>
-</head>
-<body>
-<div class="app">
-  <aside>
-    <div class="brand">
-      <h1>ADAS‑TO Explorer</h1>
-      <p id="subtitle">loading…</p>
-    </div>
-    <div class="filters">
-      <label>Search</label>
-      <input id="q" placeholder="model / driver / route"/>
-      <div class="row2">
-        <div><label>Brand</label><select id="f_brand"></select></div>
-        <div><label>Trigger</label><select id="f_trigger"></select></div>
-      </div>
-      <div class="row2">
-        <div><label>Log</label><select id="f_log"></select></div>
-        <div><label>Powertrain</label><select id="f_powertrain"></select></div>
-      </div>
-      <div class="chips">
-        <div class="chip" id="c_labelled">labelled only</div>
-        <div class="chip" id="c_reset">reset</div>
-      </div>
-    </div>
-    <div class="cliplist" id="cliplist"></div>
-  </aside>
-
-  <main>
-    <div class="top">
-      <div>
-        <div class="videowrap">
-          <video id="video" preload="metadata" playsinline></video>
-          <div class="hud" id="hud">–</div>
-        </div>
-        <div class="scrub" id="scrub">
-          <div class="seg eng" id="seg_eng" style="left:0;width:50%"></div>
-          <div class="seg man" id="seg_man" style="left:50%;width:50%"></div>
-          <div class="evline"></div>
-          <div class="play" id="playhead"></div>
-          <div class="lbl" style="left:4px">ADAS engaged</div>
-          <div class="lbl" style="left:52%">manual</div>
-        </div>
-        <div class="chips">
-          <button id="btn_play">▶ play</button>
-          <button id="btn_pre">−1s</button>
-          <button id="btn_post">+1s</button>
-          <button id="btn_event">⤓ takeover</button>
-          <span class="muted" style="font-size:11px;align-self:center" id="vt">–</span>
-        </div>
-      </div>
-      <div>
-        <div class="card" id="infocard"><h2>Clip</h2><div id="info" class="muted">select a clip</div></div>
-        <div class="card" style="margin-top:10px">
-          <h2>Prediction <span id="modelname" class="muted"></span></h2>
-          <div id="predout" class="muted" style="font-size:11px">select a labelled clip</div>
-        </div>
-      </div>
-    </div>
-    <div class="charts" id="charts"><div id="loading">select a clip…</div></div>
-  </main>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/uplot@1.6.24/dist/uPlot.iife.min.js"></script>
-<script>
+﻿
 const $ = s => document.querySelector(s);
 const state = { clips: [], cur: null, tel: null, plots: [], filters: {} };
 
 /* ---------------- helpers ---------------- */
-const fmtNum = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? '–' : (+v).toFixed(d);
+const fmtNum = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? 'â€“' : (+v).toFixed(d);
 
 function panelDefs(tel) {
   const s = tel.series;
@@ -202,13 +21,13 @@ function panelDefs(tel) {
       ].filter(Boolean) },
 
     // ---- 3 x 2 grid ----------------------------------------------------
-    { title: 'Acceleration', unit: 'm/s²', native: hz.carState,
+    { title: 'Acceleration', unit: 'm/sÂ²', native: hz.carState,
       series: [
         has('aEgo') && { key: 'aEgo', label: 'aEgo', color: '#3fb950', width: 2, dig: 2 },
         has('aTarget') && { key: 'aTarget', label: 'aTarget', color: '#d29922', dash: [4, 3], dig: 2 },
         has('actuators.accel') && { key: 'actuators.accel', label: 'cmd accel', color: '#bc8cff', dash: [2, 3], dig: 2 },
       ].filter(Boolean) },
-    { title: 'Steering', unit: 'deg / N·m', native: hz.carState,
+    { title: 'Steering', unit: 'deg / NÂ·m', native: hz.carState,
       series: [
         has('steeringAngleDeg') && { key: 'steeringAngleDeg', label: 'angle', color: '#f0883e', width: 2, dig: 1 },
         has('steeringTorque') && { key: 'steeringTorque', label: 'torque', color: '#ec6cb9', dig: 0 },
@@ -228,11 +47,11 @@ function panelDefs(tel) {
         has('longActive') && { key: 'longActive', label: 'longActive', color: '#d29922', dash: [2, 2], dig: 0 },
       ].filter(Boolean) },
     // dual axis: distance/speed on the left, safety margins (seconds) on the right
-    { title: 'Lead vehicle & safety margins', unit: 'm · m/s | s',
+    { title: 'Lead vehicle & safety margins', unit: 'm Â· m/s | s',
       native: hz.radarState, height: 116,
       series: [
         has('leadOne.dRel') && { key: 'leadOne.dRel', label: 'dRel', color: '#58a6ff', width: 2, dig: 1 },
-        has('leadTwo.dRel') && { key: 'leadTwo.dRel', label: 'dRel₂', color: '#6e7681', dash: [3, 3], dig: 1 },
+        has('leadTwo.dRel') && { key: 'leadTwo.dRel', label: 'dRelâ‚‚', color: '#6e7681', dash: [3, 3], dig: 1 },
         has('leadOne.vRel') && { key: 'leadOne.vRel', label: 'vRel', color: '#f0883e', dig: 1 },
         has('ttc') && { key: 'ttc', label: 'TTC', color: '#f85149', width: 2, dig: 2, scale: 'y2' },
         has('thw') && { key: 'thw', label: 'THW', color: '#3fb950', dig: 2, scale: 'y2' },
@@ -279,7 +98,7 @@ function makePanel(def, host, x, tel) {
   const head = document.createElement('div');
   head.className = 'h';
   head.innerHTML = `<span>${def.title}</span>` +
-    `<em>${def.unit} · native ${fmtNum(def.native, 1)} Hz</em>`;
+    `<em>${def.unit} Â· native ${fmtNum(def.native, 1)} Hz</em>`;
   const box = document.createElement('div');
   el.appendChild(head); el.appendChild(box); host.appendChild(el);
 
@@ -317,7 +136,7 @@ function makePanel(def, host, x, tel) {
         points: { show: false },
         // fixed precision -> the legend never changes width mid-playback
         value: (self, v) => (v === null || v === undefined || Number.isNaN(v))
-          ? '–' : v.toFixed(s.dig),
+          ? 'â€“' : v.toFixed(s.dig),
         ...(def.step ? { paths: uPlot.paths.stepped({ align: 1 }) } : {}),
       })),
     ],
@@ -404,9 +223,9 @@ function moveCursor(force = false) {
   $('#playhead').style.left =
     Math.min(100, Math.max(0, (video.currentTime / dur) * 100)) + '%';
   $('#vt').textContent =
-    `${video.currentTime.toFixed(2)}s / ${dur.toFixed(2)}s  ·  t=${t >= 0 ? '+' : ''}${t.toFixed(2)}s`;
+    `${video.currentTime.toFixed(2)}s / ${dur.toFixed(2)}s  Â·  t=${t >= 0 ? '+' : ''}${t.toFixed(2)}s`;
   $('#hud').innerHTML = `<b>t = ${t >= 0 ? '+' : ''}${t.toFixed(2)} s</b>` +
-    (Math.abs(t) < 0.25 ? ' &nbsp;← TAKEOVER' : '');
+    (Math.abs(t) < 0.25 ? ' &nbsp;â† TAKEOVER' : '');
 }
 
 function tick() {
@@ -440,9 +259,9 @@ async function loadClip(key) {
   document.querySelectorAll('.clip').forEach(e => e.classList.toggle('active', e.dataset.key === key));
   // reset previous clip's UI so nothing accumulates across selections
   destroyPlots();
-  $('#charts').innerHTML = '<div id="loading">loading telemetry…</div>';
-  $('#info').innerHTML = '<span class="muted">loading…</span>';
-  $('#predout').innerHTML = '<span class="muted">–</span>';
+  $('#charts').innerHTML = '<div id="loading">loading telemetryâ€¦</div>';
+  $('#info').innerHTML = '<span class="muted">loadingâ€¦</span>';
+  $('#predout').innerHTML = '<span class="muted">â€“</span>';
   $('#modelname').textContent = '';
   const r = await fetch(`/api/clip/${key}`);
   if (!r.ok) { $('#charts').innerHTML = '<div id="loading">failed: ' + r.status + '</div>'; return; }
@@ -452,19 +271,19 @@ async function loadClip(key) {
   video.load();
 
   const m = d.meta;
-  const trig = m.primary_trigger || '— (no labels: clip not re-identified)';
+  const trig = m.primary_trigger || 'â€” (no labels: clip not re-identified)';
   const warn = d.telemetry.warnings || [];
   const warnHtml = warn.length
-    ? `<div class="warn">${warn.map(w => '• ' + w).join('<br/>')}</div>` : '';
+    ? `<div class="warn">${warn.map(w => 'â€¢ ' + w).join('<br/>')}</div>` : '';
   $('#info').innerHTML = `
     <div class="kv">
       <div class="k">clip</div><div>${key}</div>
-      <div class="k">brand / model</div><div>${m.brand || '–'} · ${m.car_model}</div>
-      <div class="k">powertrain</div><div>${m.powertrain || '–'}</div>
-      <div class="k">log</div><div>${m.log_kind} @ ${m.log_hz} Hz · cam ${m.camera_fps} fps</div>
+      <div class="k">brand / model</div><div>${m.brand || 'â€“'} Â· ${m.car_model}</div>
+      <div class="k">powertrain</div><div>${m.powertrain || 'â€“'}</div>
+      <div class="k">log</div><div>${m.log_kind} @ ${m.log_hz} Hz Â· cam ${m.camera_fps} fps</div>
       <div class="k">trigger</div><div><b>${trig}</b></div>
-      <div class="k">scenario</div><div>${m.scenario || '–'}</div>
-      <div class="k">post maneuver</div><div>${m.post_maneuver_type || '–'}</div>
+      <div class="k">scenario</div><div>${m.scenario || 'â€“'}</div>
+      <div class="k">post maneuver</div><div>${m.post_maneuver_type || 'â€“'}</div>
       <div class="k">risk / maneuver</div><div>${fmtNum(m.risk_score,3)} / ${fmtNum(m.maneuver_score,3)}</div>
       <div class="k">ADAS engaged</div><div>${fmtNum(d.telemetry.adas_engaged_pct,1)} % of clip</div>
     </div>` + warnHtml;
@@ -483,20 +302,20 @@ async function loadClip(key) {
 
 async function runPredict(key) {
   const tgt = 'post_maneuver_type';
-  $('#predout').innerHTML = 'running…';
+  $('#predout').innerHTML = 'runningâ€¦';
   $('#modelname').textContent = '';
   try {
     const r = await fetch(`/api/predict?car_model=${encodeURIComponent(key.split('/')[0])}` +
       `&driver=${key.split('/')[1]}&route=${key.split('/')[2]}&clip_id=${key.split('/')[3]}&target=${tgt}`);
     if (!r.ok) { $('#predout').textContent = 'unavailable (' + r.status + ')'; return; }
     const d = await r.json();
-    $('#modelname').textContent = `· ${d.model}`;
-    let html = `<div>target <b>${d.target}</b> · leave-driver-out</div>`;
+    $('#modelname').textContent = `Â· ${d.model}`;
+    let html = `<div>target <b>${d.target}</b> Â· leave-driver-out</div>`;
     if (d.probabilities) {
       const rows = Object.entries(d.probabilities).sort((a, b) => b[1] - a[1]);
       html += '<table class="pr">';
       for (const [c, p] of rows) {
-        const mark = (c === d.actual) ? ' ✔' : '';
+        const mark = (c === d.actual) ? ' âœ”' : '';
         html += `<tr><td>${c}${mark}</td><td>${(p*100).toFixed(1)}%</td></tr>
                  <tr><td colspan="2"><div class="bar"><i style="width:${(p*100).toFixed(1)}%"></i></div></td></tr>`;
       }
@@ -505,7 +324,7 @@ async function runPredict(key) {
     } else {
       html += `<div>predicted <b>${fmtNum(d.prediction,3)}</b></div>`;
     }
-    html += d.degenerate ? '<div class="warn">small training set — treat with caution</div>' : '';
+    html += d.degenerate ? '<div class="warn">small training set â€” treat with caution</div>' : '';
     $('#predout').innerHTML = html;
   } catch (e) { $('#predout').textContent = 'error: ' + e; }
 }
@@ -534,7 +353,7 @@ async function loadList() {
     </div>`).join('') || '<div id="loading">no clips</div>';
   document.querySelectorAll('.clip').forEach(e =>
     e.addEventListener('click', () => loadClip(e.dataset.key)));
-  $('#subtitle').textContent = `${d.total} clips match · ${VIEW_TOTAL} total`;
+  $('#subtitle').textContent = `${d.total} clips match Â· ${VIEW_TOTAL} total`;
 }
 
 let VIEW_TOTAL = 0;
@@ -544,7 +363,7 @@ async function boot() {
     fetch('/api/model').then(r => r.json()),
   ]);
   VIEW_TOTAL = fac.n_clips;
-  $('#subtitle').textContent = `${fac.n_clips} clips · ${fac.n_labelled} labelled · TabPFN ${mdl.tabpfn_available ? 'ready' : 'needs token'}`;
+  $('#subtitle').textContent = `${fac.n_clips} clips Â· ${fac.n_labelled} labelled Â· TabPFN ${mdl.tabpfn_available ? 'ready' : 'needs token'}`;
   opts('#f_brand', fac.brand, 'brands');
   opts('#f_trigger', fac.primary_trigger, 'triggers');
   opts('#f_log', fac.log_kind, 'log kinds');
@@ -570,8 +389,8 @@ async function boot() {
     const r = e.currentTarget.getBoundingClientRect();
     seek((e.clientX - r.left) / r.width * (video.duration || 20));
   };
-  video.addEventListener('play', () => $('#btn_play').textContent = '❚❚ pause');
-  video.addEventListener('pause', () => $('#btn_play').textContent = '▶ play');
+  video.addEventListener('play', () => $('#btn_play').textContent = 'âšâš pause');
+  video.addEventListener('pause', () => $('#btn_play').textContent = 'â–¶ play');
 
   await loadList();
   // open a labelled clip with a lead vehicle so the demo is interesting
@@ -579,6 +398,4 @@ async function boot() {
   if (first) loadClip(first.key);
 }
 boot();
-</script>
-</body>
-</html>
+
