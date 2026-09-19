@@ -1,11 +1,11 @@
 {
   "n_sampled": 80,
-  "n_with_correlation": 17,
-  "median_spearman": 0.6738906088751291,
-  "positive_fraction": 0.7647058823529411,
+  "n_with_correlation": 35,
+  "median_spearman": 0.7500000000000001,
+  "positive_fraction": 0.8285714285714286,
   "pass": true,
-  "median_spearman_pre_window": 0.4053746317110378,
-  "n_pre_window": 20,
+  "median_spearman_pre_window": 0.7277310924369748,
+  "n_pre_window": 39,
   "per_row": [
     {
       "car_model": "RIVIAN_R1_GEN1",
@@ -24,10 +24,10 @@
       "route": "route_005",
       "clip_id_pub": 18,
       "decision_t_s": -4.5,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.9442724458204333,
+      "n_pre": 28,
+      "rho_pre": 0.8899835796387521
     },
     {
       "car_model": "HONDA_ACCORD",
@@ -46,10 +46,10 @@
       "route": "route_116",
       "clip_id_pub": 0,
       "decision_t_s": -5.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 10,
+      "rho": 0.9151515151515152,
+      "n_pre": 13,
+      "rho_pre": -0.10989010989010989
     },
     {
       "car_model": "TESLA_MODEL_X",
@@ -90,9 +90,9 @@
       "route": "route_186",
       "clip_id_pub": 3,
       "decision_t_s": -3.5,
-      "n": 0,
+      "n": 12,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 21,
       "rho_pre": null
     },
     {
@@ -101,10 +101,10 @@
       "route": "route_001",
       "clip_id_pub": 0,
       "decision_t_s": -4.0,
-      "n": 2,
-      "rho": null,
-      "n_pre": 4,
-      "rho_pre": null
+      "n": 18,
+      "rho": -0.2425180598555212,
+      "n_pre": 31,
+      "rho_pre": -0.41935483870967744
     },
     {
       "car_model": "TOYOTA_ALPHARD_2020",
@@ -112,10 +112,10 @@
       "route": "route_005",
       "clip_id_pub": 36,
       "decision_t_s": -2.0,
-      "n": 14,
+      "n": 18,
       "rho": null,
-      "n_pre": 29,
-      "rho_pre": 0.4394353744020411
+      "n_pre": 33,
+      "rho_pre": 0.4136701519960153
     },
     {
       "car_model": "HYUNDAI_IONIQ_6",
@@ -123,9 +123,9 @@
       "route": "route_014",
       "clip_id_pub": 0,
       "decision_t_s": 0.0,
-      "n": 0,
+      "n": 2,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 2,
       "rho_pre": null
     },
     {
@@ -146,9 +146,9 @@
       "clip_id_pub": 8,
       "decision_t_s": -0.5,
       "n": 18,
-      "rho": 0.9050567595459237,
+      "rho": 0.9938080495356036,
       "n_pre": 44,
-      "rho_pre": 0.6844256518675123
+      "rho_pre": 0.77815362931642
     },
     {
       "car_model": "TOYOTA_CAMRY_2021",
@@ -156,10 +156,10 @@
       "route": "route_121",
       "clip_id_pub": 4,
       "decision_t_s": -1.5,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.9870935750126988,
+      "n_pre": 43,
+      "rho_pre": 0.9989051239799343
     },
     {
       "car_model": "LEXUS_RX_TSS2",
@@ -168,9 +168,9 @@
       "clip_id_pub": 0,
       "decision_t_s": -4.5,
       "n": 18,
-      "rho": 0.5810113519091847,
+      "rho": 0.8018575851393188,
       "n_pre": 28,
-      "rho_pre": 0.5679485478121417
+      "rho_pre": 0.5983303737432972
     },
     {
       "car_model": "ACURA_MDX_3G_MMR",
@@ -178,10 +178,10 @@
       "route": "route_172",
       "clip_id_pub": 6,
       "decision_t_s": 0.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 9,
+      "rho": -0.6833333333333333,
+      "n_pre": 39,
+      "rho_pre": -0.09951911227389719
     },
     {
       "car_model": "HONDA_CIVIC_2022",
@@ -189,9 +189,9 @@
       "route": "route_008",
       "clip_id_pub": 8,
       "decision_t_s": -4.0,
-      "n": 0,
+      "n": 18,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 31,
       "rho_pre": null
     },
     {
@@ -222,9 +222,9 @@
       "route": "route_001",
       "clip_id_pub": 69,
       "decision_t_s": -1.0,
-      "n": 0,
+      "n": 9,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 15,
       "rho_pre": null
     },
     {
@@ -244,9 +244,9 @@
       "route": "route_001",
       "clip_id_pub": 0,
       "decision_t_s": -6.5,
-      "n": 0,
+      "n": 1,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 1,
       "rho_pre": null
     },
     {
@@ -255,10 +255,10 @@
       "route": "route_006",
       "clip_id_pub": 12,
       "decision_t_s": -3.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.9855521155830752,
+      "n_pre": 36,
+      "rho_pre": 0.9812097812097812
     },
     {
       "car_model": "NISSAN_LEAF",
@@ -277,10 +277,10 @@
       "route": "route_005",
       "clip_id_pub": 27,
       "decision_t_s": -3.5,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.5108359133126935,
+      "n_pre": 33,
+      "rho_pre": 0.8736631016042781
     },
     {
       "car_model": "ACURA_MDX_3G_MMR",
@@ -288,10 +288,10 @@
       "route": "route_254",
       "clip_id_pub": 30,
       "decision_t_s": -6.5,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": -0.12899896800825592,
+      "n_pre": 18,
+      "rho_pre": -0.12899896800825592
     },
     {
       "car_model": "RIVIAN_R1_GEN1",
@@ -310,10 +310,10 @@
       "route": "route_002",
       "clip_id_pub": 14,
       "decision_t_s": -5.5,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.6346749226006192,
+      "n_pre": 23,
+      "rho_pre": 0.5875957678765662
     },
     {
       "car_model": "HYUNDAI_IONIQ_5",
@@ -332,9 +332,9 @@
       "route": "route_004",
       "clip_id_pub": 0,
       "decision_t_s": -3.0,
-      "n": 0,
+      "n": 3,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 3,
       "rho_pre": null
     },
     {
@@ -354,9 +354,9 @@
       "route": "route_001",
       "clip_id_pub": 0,
       "decision_t_s": -4.5,
-      "n": 0,
+      "n": 4,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 4,
       "rho_pre": null
     },
     {
@@ -377,9 +377,9 @@
       "clip_id_pub": 11,
       "decision_t_s": -2.5,
       "n": 18,
-      "rho": -0.09184726522187822,
+      "rho": 0.33746130030959753,
       "n_pre": 38,
-      "rho_pre": -0.1902834008097166
+      "rho_pre": -0.2773826458036984
     },
     {
       "car_model": "HONDA_CIVIC",
@@ -401,7 +401,7 @@
       "n": 8,
       "rho": 0.2380952380952381,
       "n_pre": 27,
-      "rho_pre": 0.1562881562881563
+      "rho_pre": 0.4432234432234432
     },
     {
       "car_model": "FORD_F_150_MK14",
@@ -409,9 +409,9 @@
       "route": "route_016",
       "clip_id_pub": 10,
       "decision_t_s": -1.5,
-      "n": 12,
+      "n": 18,
       "rho": null,
-      "n_pre": 21,
+      "n_pre": 43,
       "rho_pre": null
     },
     {
@@ -431,9 +431,9 @@
       "route": "route_004",
       "clip_id_pub": 0,
       "decision_t_s": -6.0,
-      "n": 0,
+      "n": 3,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 3,
       "rho_pre": null
     },
     {
@@ -442,10 +442,10 @@
       "route": "route_004",
       "clip_id_pub": 3,
       "decision_t_s": -3.0,
-      "n": 8,
-      "rho": -0.9285714285714287,
-      "n_pre": 26,
-      "rho_pre": 0.18564102564102564
+      "n": 18,
+      "rho": 0.7110423116615068,
+      "n_pre": 36,
+      "rho_pre": 0.6782496782496783
     },
     {
       "car_model": "HONDA_ODYSSEY_2018",
@@ -464,10 +464,10 @@
       "route": "route_199",
       "clip_id_pub": 5,
       "decision_t_s": -2.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 4,
-      "rho_pre": null
+      "n": 17,
+      "rho": 0.2942980320172463,
+      "n_pre": 38,
+      "rho_pre": 0.6169840264564728
     },
     {
       "car_model": "TESLA_AP3_MODEL_3",
@@ -477,7 +477,7 @@
       "decision_t_s": -3.0,
       "n": 17,
       "rho": null,
-      "n_pre": 22,
+      "n_pre": 30,
       "rho_pre": null
     },
     {
@@ -486,10 +486,10 @@
       "route": "route_006",
       "clip_id_pub": 9,
       "decision_t_s": -5.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.6491228070175438,
+      "n_pre": 25,
+      "rho_pre": 0.7730769230769231
     },
     {
       "car_model": "HYUNDAI_IONIQ_5_2022",
@@ -497,10 +497,10 @@
       "route": "route_002",
       "clip_id_pub": 5,
       "decision_t_s": 0.0,
-      "n": 0,
+      "n": 1,
       "rho": null,
-      "n_pre": 9,
-      "rho_pre": -0.7967246167544522
+      "n_pre": 10,
+      "rho_pre": -0.8254031273145536
     },
     {
       "car_model": "ACURA_MDX_3G_MMR",
@@ -508,10 +508,10 @@
       "route": "route_263",
       "clip_id_pub": 10,
       "decision_t_s": -3.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 17,
+      "rho": 0.7500000000000001,
+      "n_pre": 34,
+      "rho_pre": 0.7277310924369748
     },
     {
       "car_model": "TESLA_MODELY",
@@ -530,9 +530,9 @@
       "route": "route_059",
       "clip_id_pub": 2,
       "decision_t_s": -4.0,
-      "n": 0,
+      "n": 1,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 1,
       "rho_pre": null
     },
     {
@@ -541,9 +541,9 @@
       "route": "route_038",
       "clip_id_pub": 11,
       "decision_t_s": -6.0,
-      "n": 0,
+      "n": 14,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 15,
       "rho_pre": null
     },
     {
@@ -552,9 +552,9 @@
       "route": "route_002",
       "clip_id_pub": 2,
       "decision_t_s": -3.5,
-      "n": 0,
+      "n": 13,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 26,
       "rho_pre": null
     },
     {
@@ -574,9 +574,9 @@
       "route": "route_046",
       "clip_id_pub": 1,
       "decision_t_s": 0.0,
-      "n": 0,
+      "n": 18,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 51,
       "rho_pre": null
     },
     {
@@ -607,10 +607,10 @@
       "route": "route_023",
       "clip_id_pub": 1,
       "decision_t_s": -5.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 1.0,
+      "n_pre": 26,
+      "rho_pre": 0.9986324786324786
     },
     {
       "car_model": "RIVIAN_R1_GEN1",
@@ -640,10 +640,10 @@
       "route": "route_029",
       "clip_id_pub": 1,
       "decision_t_s": -3.5,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 5,
+      "rho": 0.7999999999999999,
+      "n_pre": 18,
+      "rho_pre": 0.7997936016511867
     },
     {
       "car_model": "HYUNDAI_IONIQ_5",
@@ -652,9 +652,9 @@
       "clip_id_pub": 0,
       "decision_t_s": 0.0,
       "n": 18,
-      "rho": 0.9917440660474718,
-      "n_pre": 34,
-      "rho_pre": 0.09942586478443136
+      "rho": 0.9112487100103198,
+      "n_pre": 41,
+      "rho_pre": -0.2732862731314076
     },
     {
       "car_model": "HONDA_ACCORD_11G",
@@ -662,10 +662,10 @@
       "route": "route_001",
       "clip_id_pub": 0,
       "decision_t_s": -6.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 9,
+      "rho": 0.7074749701108396,
+      "n_pre": 12,
+      "rho_pre": 0.7875976921359984
     },
     {
       "car_model": "SUBARU_CROSSTREK_2024",
@@ -673,9 +673,9 @@
       "route": "route_002",
       "clip_id_pub": 2,
       "decision_t_s": -1.0,
-      "n": 0,
+      "n": 2,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 26,
       "rho_pre": null
     },
     {
@@ -695,10 +695,10 @@
       "route": "route_094",
       "clip_id_pub": 15,
       "decision_t_s": -3.5,
-      "n": 16,
-      "rho": 0.9147058823529413,
-      "n_pre": 30,
-      "rho_pre": 0.8901001112347052
+      "n": 18,
+      "rho": 0.9071207430340558,
+      "n_pre": 33,
+      "rho_pre": 0.8806818181818182
     },
     {
       "car_model": "FORD_F_150_MK14",
@@ -706,9 +706,9 @@
       "route": "route_011",
       "clip_id_pub": 4,
       "decision_t_s": -4.0,
-      "n": 1,
+      "n": 7,
       "rho": null,
-      "n_pre": 1,
+      "n_pre": 7,
       "rho_pre": null
     },
     {
@@ -717,10 +717,10 @@
       "route": "route_032",
       "clip_id_pub": 1,
       "decision_t_s": -2.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": -0.07946336429308565,
+      "n_pre": 41,
+      "rho_pre": 0.809233449477352
     },
     {
       "car_model": "RAM_HD_5TH_GEN",
@@ -728,9 +728,9 @@
       "route": "route_001",
       "clip_id_pub": 69,
       "decision_t_s": -5.0,
-      "n": 0,
+      "n": 4,
       "rho": null,
-      "n_pre": 0,
+      "n_pre": 4,
       "rho_pre": null
     },
     {
@@ -750,10 +750,10 @@
       "route": "route_145",
       "clip_id_pub": 1,
       "decision_t_s": -3.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.9422084623323013,
+      "n_pre": 36,
+      "rho_pre": 0.8934362934362934
     },
     {
       "car_model": "RIVIAN_R1_GEN1",
@@ -763,7 +763,7 @@
       "decision_t_s": -1.0,
       "n": 0,
       "rho": null,
-      "n_pre": 2,
+      "n_pre": 3,
       "rho_pre": null
     },
     {
@@ -783,10 +783,10 @@
       "route": "route_071",
       "clip_id_pub": 5,
       "decision_t_s": -1.0,
-      "n": 0,
+      "n": 3,
       "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n_pre": 12,
+      "rho_pre": 0.17402730811488895
     },
     {
       "car_model": "TOYOTA_PRIUS",
@@ -794,9 +794,9 @@
       "route": "route_004",
       "clip_id_pub": 12,
       "decision_t_s": -2.0,
-      "n": 0,
+      "n": 18,
       "rho": null,
-      "n_pre": 7,
+      "n_pre": 41,
       "rho_pre": null
     },
     {
@@ -807,8 +807,8 @@
       "decision_t_s": -0.5,
       "n": 17,
       "rho": 0.7921522028464212,
-      "n_pre": 36,
-      "rho_pre": 0.8115065336322755
+      "n_pre": 47,
+      "rho_pre": 0.9181579027282134
     },
     {
       "car_model": "FORD_F_150_MK14",
@@ -850,9 +850,9 @@
       "clip_id_pub": 14,
       "decision_t_s": -1.5,
       "n": 18,
-      "rho": 0.07327141382868937,
-      "n_pre": 20,
-      "rho_pre": 0.3233082706766917
+      "rho": 0.04643962848297213,
+      "n_pre": 39,
+      "rho_pre": -0.33421052631578946
     },
     {
       "car_model": "TOYOTA_RAV4_2023",
@@ -860,10 +860,10 @@
       "route": "route_002",
       "clip_id_pub": 0,
       "decision_t_s": -4.0,
-      "n": 0,
-      "rho": null,
-      "n_pre": 0,
-      "rho_pre": null
+      "n": 18,
+      "rho": 0.9876160990712075,
+      "n_pre": 31,
+      "rho_pre": 0.9975806451612905
     },
     {
       "car_model": "RIVIAN_R1_GEN1",

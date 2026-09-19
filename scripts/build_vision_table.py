@@ -321,7 +321,10 @@ def main() -> None:
             "alignment": "t_rel = frame_idx / CAP_PROP_FPS - 10.0 (clip-relative video time; "
                          "takeover at t_rel = 0, same axis as build_clip_telemetry t)",
             "window": "closed [decision_t_s - W, decision_t_s], W from this schema",
-            "lead_rule": "vehicle box with y2 >= 0.55*H and cx in [0.25W, 0.75W], largest area",
+            "lead_rule": "vehicle box centred in the ego-lane corridor [0.25W, 0.75W] with "
+                         "the largest area; the previous frame's lead is retained when "
+                         "IoU >= 0.1 (temporal continuity). No near-field y2 gate, so "
+                         "distant leads are included.",
             "clips_with_frames": int(len(available)),
             "clips_total": int(len(clips)),
             "leakage_assert": "max frame t_rel used <= decision_t_s (<= 0) for every row",

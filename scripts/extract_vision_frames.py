@@ -50,6 +50,7 @@ CORRIDOR_LEFT = 0.25
 CORRIDOR_RIGHT = 0.75
 NEAR_FIELD_Y2 = 0.55
 CORRIDOR_MIN_Y2 = 0.30
+LEAD_IOU_CONTINUITY = 0.1
 
 FRAME_COLS = [
     "car_model", "driver", "route", "clip_id_pub", "vid_kind",
@@ -120,7 +121,19 @@ def detect_batch(model, frames, *, conf: float, imgsz: int, device, batch: int =
     return per_frame
 
 
-def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind):
+def _iou(a: dict, b: dict) -> float:
+    ix1, iy1 = max(a["x1"], b["x1"]), max(a["y1"], b["y1"])
+    ix2, iy2 = min(a["x2"], b["x2"]), min(a["y2"], b["y2"])
+    iw, ih = max(0.0, ix2 - ix1), max(0.0, iy2 - iy1)
+    inter = iw * ih
+    if inter <= 0:
+        return 0.0
+    ua = (a["x2"] - a["x1"]) * (a["y2"] - a["y1"]) + \
+        (b["x2"] - b["x1"]) * (b["y2"] - b["y1"]) - inter
+    return float(inter / ua) if ua > 0 else 0.0
+
+
+def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind, prev_lead=None):
     import cv2
 
     h, w = frame.shape[:2]
@@ -150,27 +163,33 @@ def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind):
         if CORRIDOR_LEFT * w <= cx <= CORRIDOR_RIGHT * w and d["y2"] >= CORRIDOR_MIN_Y2 * h:
             n_corridor += 1
 
+    # Any vehicle centred in the ego-lane corridor is a lead candidate, regardless
+    # of how near it is (the old rule dropped distant leads because their box sits
+    # high in the frame). Prefer the previous frame's lead when it still overlaps,
+    # which keeps the identity stable frame-to-frame.
+    corridor = [d for d in vehicles
+                if CORRIDOR_LEFT * w <= (d["x1"] + d["x2"]) / 2.0 <= CORRIDOR_RIGHT * w]
+    best = None
+    if prev_lead is not None:
+        overlap = [( _iou(d, prev_lead), d) for d in corridor]
+        overlap = [x for x in overlap if x[0] >= LEAD_IOU_CONTINUITY]
+        if overlap:
+            best = max(overlap, key=lambda x: x[0])[1]
+    if best is None and corridor:
+        best = max(corridor, key=lambda d: max(0.0, d["x2"] - d["x1"])
+                   * max(0.0, d["y2"] - d["y1"]))
+
     lead_present = 0.0
     lead_conf = lead_area = lead_cx = lead_y2 = NAN
-    best = None
-    best_area = -1.0
-    for d in vehicles:
-        cx = (d["x1"] + d["x2"]) / 2.0
-        if d["y2"] < NEAR_FIELD_Y2 * h:
-            continue
-        if not (CORRIDOR_LEFT * w <= cx <= CORRIDOR_RIGHT * w):
-            continue
-        area = max(0.0, d["x2"] - d["x1"]) * max(0.0, d["y2"] - d["y1"])
-        if area > best_area:
-            best_area, best = area, d
     if best is not None:
         lead_present = 1.0
         lead_conf = best["conf"]
-        lead_area = best_area / (w * h)
+        lead_area = max(0.0, best["x2"] - best["x1"]) * \
+            max(0.0, best["y2"] - best["y1"]) / (w * h)
         lead_cx = ((best["x1"] + best["x2"]) / 2.0 - w / 2.0) / w
         lead_y2 = best["y2"] / h
 
-    return {
+    scalars = {
         "t_rel": t_rel,
         "frame_idx": int(frame_idx),
         "img_w": int(w),
@@ -189,6 +208,7 @@ def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind):
         "brightness_mean": brightness,
         "motion_mean": motion,
     }
+    return scalars, best
 
 
 def process_clip(clip, model, *, fps_target, conf, imgsz, device):
@@ -200,9 +220,11 @@ def process_clip(clip, model, *, fps_target, conf, imgsz, device):
     grays = [cv2.cvtColor(f, cv2.COLOR_BGR2GRAY) for f in bgr]
     dets = detect_batch(model, bgr, conf=conf, imgsz=imgsz, device=device)
     rows = []
+    prev_lead = None
     for i, (idx, t_rel, _) in enumerate(frames):
         prev = grays[i - 1] if i > 0 else None
-        s = frame_scalars(dets[i], bgr[i], prev, t_rel, idx, clip.vid_kind)
+        s, prev_lead = frame_scalars(dets[i], bgr[i], prev, t_rel, idx,
+                                     clip.vid_kind, prev_lead)
         s["car_model"] = clip.car_model
         s["driver"] = clip.driver
         s["route"] = clip.route

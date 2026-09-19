@@ -537,10 +537,12 @@ this is reported as a null result.
 
 1. **Per-frame extraction.** Decode each clip's `takeover.mp4` once, sequentially at
    **5 Hz** (100 frames/clip), and run **YOLOv8n** (`conf 0.35`, `imgsz 640`, GPU) in
-   batches. 1,041 clips / **104,059 frames** in ~5 min. Per-frame scalars: vehicle /
+   batches. 1,041 clips / **104,059 frames** in ~6 min. Per-frame scalars: vehicle /
    corridor-vehicle / person / bicycle / traffic-light / stop-sign counts, lead-box
    geometry (`area_frac`, signed `cx_offset`, `y2_norm`, `conf`), frame brightness and
-   frame-to-frame motion.
+   frame-to-frame motion. The lead is the largest-area vehicle centred in the ego-lane
+   corridor, with the previous frame's lead retained when IoU ≥ 0.1; there is **no
+   near-field gate**, so distant leads are included.
 
 2. **Window aggregation.** The same windows as the CAN forecast table — closed
    `[s − 3.5, s]`, `W` read from `forecast_schema.json` — giving 14,574 rows × 33
@@ -550,8 +552,11 @@ this is reported as a null result.
    time with the takeover at 0 — the same axis as `build_clip_telemetry`'s `t`, using the
    by-construction fact that `video_time_s − clip_start_s == 10.0`. The QA gate samples
    (clip, window) rows, correlates `1/√lead_area_frac` against radar `leadOne.dRel`, and
-   writes a contact sheet. It passes: **median Spearman 0.67, 76% of usable clips
-   positive**, and the contact sheet shows the box tracking the car ahead.
+   writes a contact sheet. It passes: **median Spearman 0.75, 83% of usable clips
+   positive**, and the contact sheet shows the box tracking the car ahead (near and
+   distant). Vision now finds a lead in **73% of windows** (was 21% with the old
+   near-field gate) and misses radar's lead in only **5.9%** of radar-lead windows
+   (was 63.6%); `corr(vision lead-present, radar lead-present)` is **0.60** (was 0.35).
 
 4. **Encoding — no imputation of a non-existent lead.** A window with no detected lead is
    a real observation, not missing data. So the lead block uses a **zero-inflated**
@@ -562,29 +567,37 @@ this is reported as a null result.
 ### Ablation (driver-disjoint `GroupKFold(5)`, full table)
 
 CAN-only reproduces `results/forecast_by_lead.csv` / `forecast_results.json` exactly,
-which is the check that the three arms are comparable.
+which is the check that the arms are comparable. `results/vision_vs_can.csv` holds the
+paired CAN vs CAN+vision numbers for every task, model, split and lead.
 
-| task / metric | model | CAN | vision only | CAN + vision |
-|---|---|---|---|---|
-| `post_maneuver_type` bal-acc | tabpfn | **0.300** | 0.275 | 0.290 |
-| `post_max_abs_steer_torque` R² | tabpfn | 0.639 | −0.272 | **0.655** |
-| `post_max_abs_steer_torque` R² | lightgbm | 0.514 | −0.517 | **0.577** |
-| `post_max_abs_jerk_mps3` R² | tabpfn | **0.000** | −0.060 | −0.005 |
-| `post_maneuver_type` bal-acc (brand-OOD) | tabpfn | **0.283** | 0.298 | 0.266 |
+| task / metric | model | CAN | CAN + vision |
+|---|---|---|---|
+| `post_maneuver_type` bal-acc | tabpfn | 0.300 | 0.300 |
+| `post_maneuver_type` bal-acc | logistic | **0.352** | 0.342 |
+| `post_max_abs_steer_torque` R² | tabpfn | 0.639 | **0.646** |
+| `post_max_abs_steer_torque` R² | lightgbm | 0.514 | **0.571** |
+| `post_max_abs_jerk_mps3` R² | tabpfn | 0.000 | 0.003 |
+| `post_maneuver_type` bal-acc (brand-OOD) | lightgbm | **0.474** | 0.409 |
+
+(Vision-only was measured in an earlier run at 0.275 bal-acc / negative steer R² and was
+not rescored here; it remains far behind CAN.)
 
 ### Reading it honestly
 
-- **Vision-only is far worse than CAN everywhere.** Frame geometry at 5 Hz cannot stand
-  in for the kinematic state, which is expected.
-- **CAN + vision shows no consistent gain.** TabPFN steer-torque edges up (0.639 → 0.655)
-  and LightGBM's jumps more (0.514 → 0.577), but neither reproduces in the per-lead
-  breakdown, where `both` simply tracks `can` at every lead, and classification does not
-  improve. A single-metric bump under 5-fold CV with a 13.4%-of-data top driver is not
-  evidence of signal.
-- **The limiting factor is the detector, not the model.** Vision finds a lead in only
-  ~36% of the windows where radar reports one, so the lead-geometry block is mostly the
-  zero sentinel. The null result therefore means "YOLOv8n geometry at this sampling rate
-  adds nothing on top of radar", not "vision is useless".
+- **CAN + vision still shows no consistent gain.** LightGBM's pooled steer-torque R² rises
+  0.514 → 0.571, but TabPFN barely moves (0.639 → 0.646), logistic gets *worse*
+  (0.544 → 0.528), and the LightGBM bump disappears on the brand-OOD split (0.474 → 0.409)
+  and in the per-lead table, where `both` is at or below `can` at nearly every lead.
+  Classification is flat; jerk is flat.
+- **The detector is no longer the excuse.** Vision now matches radar's lead in 94% of
+  radar-lead windows and the alignment QA passes cleanly. So the null is not "the camera
+  couldn't see the car" — it is that **radar already measures the lead's distance and
+  closing speed better than a monocular box can**, so YOLO geometry is a noisy proxy that
+  adds nothing once radar is in the feature set.
+- This is the honest form of the result: a strong, well-validated detector whose features
+  are redundant with the CAN/radar block for these targets. Beating the kinematic baseline
+  would need cues radar does not have — signal state, signage, lane geometry, VRUs — not
+  more lead geometry.
 - The per-lead table (`results/vision_by_lead.csv`) shares `forecast_by_lead.csv`'s schema
   so the CAN baselines can be diffed line-for-line.
 
