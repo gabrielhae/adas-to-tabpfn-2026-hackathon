@@ -545,10 +545,13 @@ this is reported as a null result.
    near-field gate**, so distant leads are included.
 
 2. **Window aggregation.** The same windows as the CAN forecast table — closed
-   `[s − 3.5, s]`, `W` read from `forecast_schema.json` — giving 14,574 rows × 51
-   `vis_*` columns (33 lead/scene + an 18-column **3×3 occupancy grid**: per-cell vehicle
-   count and summed box area, rows far→near by box centre, columns left→right).
-   `vis_n_frames` averages 18 per window (expected `W × 5 = 17.5`).
+   `[s − 3.5, s]`, `W` read from `forecast_schema.json` — giving 14,574 rows × 58
+   `vis_*` columns (18 lead/scene + an 18-column **3×3 occupancy grid** + 7 **traffic-light
+   state** features). The grid counts vehicles and sums box area per cell (rows far→near by
+   box centre, columns left→right); the light features read the lamp state (red/amber/green)
+   from the colour of each detected light box, with a conservative `unknown`. Both are
+   zero-inflated and defined on every row. `vis_n_frames` averages 18 per window
+   (expected `W × 5 = 17.5`).
 
 3. **Alignment.** `t_rel = frame_idx / CAP_PROP_FPS − 10.0`, i.e. clip-relative video
    time with the takeover at 0 — the same axis as `build_clip_telemetry`'s `t`, using the
@@ -564,7 +567,7 @@ this is reported as a null result.
    a real observation, not missing data. So the lead block uses a **zero-inflated**
    encoding: geometry is `0.0` when absent and `vis_lead_available` (0/1) records whether
    a lead was there at all. This stops `model.encode()` from median-imputing a "typical
-   lead" into an empty lane; all 51 `vis_*` columns are defined on every row.
+   lead" into an empty lane; all 58 `vis_*` columns are defined on every row.
 
 ### Ablation (driver-disjoint `GroupKFold(5)`, full table)
 
@@ -572,33 +575,39 @@ CAN-only reproduces `results/forecast_by_lead.csv` / `forecast_results.json` exa
 which is the check that the arms are comparable. `results/vision_vs_can.csv` holds the
 paired CAN vs CAN+vision numbers for every task, model, split and lead.
 
-| task / metric | model | CAN | CAN + vision |
-|---|---|---|---|
-| `post_maneuver_type` bal-acc | tabpfn | 0.300 | 0.297 |
-| `post_maneuver_type` bal-acc | logistic | **0.352** | 0.331 |
-| `post_max_abs_steer_torque` R² | tabpfn | **0.639** | 0.630 |
-| `post_max_abs_steer_torque` R² | lightgbm | 0.514 | **0.550** |
-| `post_max_abs_jerk_mps3` R² | lightgbm | −0.282 | **−0.211** |
-| `post_maneuver_type` bal-acc (brand-OOD) | lightgbm | **0.474** | 0.414 |
+| task / metric | model | CAN | CAN + vision | CAN + light only |
+|---|---|---|---|---|
+| `post_maneuver_type` bal-acc | tabpfn | 0.300 | 0.305 | 0.306 |
+| `post_maneuver_type` macro-F1 | lightgbm | **0.306** | 0.266 | 0.306 |
+| `post_max_abs_steer_torque` R² | lightgbm | 0.514 | 0.533 | **0.546** |
+| `post_max_abs_steer_torque` R² | tabpfn | **0.639** | 0.637 | 0.638 |
+| `post_max_abs_jerk_mps3` R² | lightgbm | −0.282 | **−0.204** | −0.291 |
+| `post_maneuver_type` bal-acc (brand-OOD) | lightgbm | **0.474** | 0.433 | 0.467 |
 
-(Vision-only was measured in an earlier run at 0.275 bal-acc / negative steer R² and was
-not rescored here; it remains far behind CAN.)
+(Logistic was dropped from these runs; vision-only was measured in an earlier run at
+0.275 bal-acc / negative steer R² and was not rescored — it remains far behind CAN.)
 
 ### Reading it honestly
 
-- **Adding the occupancy grid did not change the answer.** LightGBM improves on pooled
-  steer-torque (0.514 → 0.550) and jerk (−0.282 → −0.211), but TabPFN and logistic get
-  slightly *worse* on steer-torque (0.639 → 0.630; 0.544 → 0.520), and LightGBM's gain
-  reverses on the brand-OOD split (0.474 → 0.414). Classification is flat. The per-lead
-  table is mixed, with TabPFN gaining at the longest leads (6.0 s: 0.187 → 0.244) and
-  losing at 4.0–4.5 s — noise, not a trend.
+- **Two more feature families, same null.** The occupancy grid (3a) and traffic-light
+  state (3b) were each added and each rescored against the frozen CAN baseline.
+  Isolated light state (`CAN + light only`, 69 features) moves pooled LightGBM
+  steer-torque 0.514 → 0.546 and leaves everything else flat; the full block moves
+  TabPFN classification 0.300 → 0.305. Neither survives the brand-OOD split
+  (LightGBM 0.474 → 0.467 light-only, 0.474 → 0.433 with the full block), and the
+  per-lead table stays flat throughout. The small pooled bumps are noise.
 - **The detector is not the excuse.** Vision matches radar's lead in 94% of radar-lead
-  windows and the alignment QA passes cleanly. The grid now tells the model where traffic
-  sits in the frame, and it still adds nothing net. The honest reading is that **radar
-  already measures lead distance and closing speed better than a monocular box can**, and
-  the grid's extra location detail is redundant with what the kinematic block encodes.
-- Beating the kinematic baseline needs cues radar does not have — signal state, signage,
-  lane geometry, VRUs — not more traffic geometry.
+  windows, the alignment QA passes cleanly, and the grid tells the model where traffic
+  sits. It still adds nothing net.
+- **Why `traffic-light state` didn't capitalise on being non-radar information:** lights
+  appear in only ~10% of frames (~8% of windows have a red, ~5% a green), so the feature
+  is sparse, and the light-heavy clips are concentrated (stoplight approaches), which
+  makes any apparent signal a candidate for scenario/driver confounding — exactly what the
+  brand-OOD reversal shows.
+- Beating the kinematic baseline needs cues that are both non-radar **and** dense across
+  clips; the remaining candidates are lane geometry (3c) and the dense representations
+  (segmentation / depth / embeddings, option 4), all of which carry higher cost and higher
+  leakage risk.
 - The per-lead table (`results/vision_by_lead.csv`) shares `forecast_by_lead.csv`'s schema
   so the CAN baselines can be diffed line-for-line.
 

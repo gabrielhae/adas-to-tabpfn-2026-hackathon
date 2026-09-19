@@ -65,7 +65,7 @@ def load_vision():
     return df, schema
 
 
-def feature_set_schema(schema: dict, name: str, drop: set) -> dict | None:
+def feature_set_schema(schema: dict, name: str, drop: set, groups: dict) -> dict | None:
     vis = [c for c in schema["features_numeric"] if c.startswith("vis_") and c not in drop]
     can = [c for c in schema["features_numeric"] if not c.startswith("vis_") and c not in drop]
     if name == "can":
@@ -78,7 +78,14 @@ def feature_set_schema(schema: dict, name: str, drop: set) -> dict | None:
         if not vis:
             return None
         return {**schema, "features_numeric": vis, "features_categorical": []}
-    raise ValueError(name)
+    if name in groups:
+        sel = [c for c in groups[name] if c not in drop]
+        if not sel:
+            return None
+        return {**schema, "features_numeric": can + sel,
+                "features_categorical": schema["features_categorical"]}
+    raise ValueError(f"unknown feature set {name!r} "
+                     f"(expected can/vis/both or a group in {sorted(groups)})")
 
 
 def main() -> None:
@@ -105,7 +112,8 @@ def main() -> None:
         models = ["tabpfn"] if ok else ["lightgbm"]
     print(f"[ablation] models = {models}\n")
 
-    schemas = {n: feature_set_schema(schema, n, dead) for n in args.feature_sets}
+    groups = schema.get("vision", {}).get("groups", {})
+    schemas = {n: feature_set_schema(schema, n, dead, groups) for n in args.feature_sets}
     runs: list[dict] = []
 
     print("=== full-table (all leads pooled) ===")

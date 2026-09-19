@@ -40,6 +40,9 @@ NAN = float("nan")
 GRID_CELLS = [(r, c) for r in range(3) for c in range(3)]
 GRID_VIS = ([f"vis_grid_cnt_mean_r{r}c{c}" for r, c in GRID_CELLS]
             + [f"vis_grid_area_mean_r{r}c{c}" for r, c in GRID_CELLS])
+TL_VIS = ["vis_tl_red_any", "vis_tl_amber_any", "vis_tl_green_any",
+          "vis_tl_unknown_any", "vis_tl_red_frac", "vis_tl_amber_frac",
+          "vis_tl_green_frac"]
 
 VISION_FEATURES = [
     "vis_available",
@@ -75,7 +78,7 @@ VISION_FEATURES = [
     "vis_any_traffic_light",
     "vis_brightness_mean",
     "vis_motion_mean",
-] + GRID_VIS
+] + GRID_VIS + TL_VIS
 
 
 def _finite(x) -> np.ndarray:
@@ -234,6 +237,12 @@ def window_vis(a: dict, lo: float, hi: float) -> dict:
     for r, c in GRID_CELLS:
         f[f"vis_grid_cnt_mean_r{r}c{c}"] = _fmean0(g(f"n_veh_r{r}c{c}"))
         f[f"vis_grid_area_mean_r{r}c{c}"] = _fmean0(g(f"area_veh_r{r}c{c}"))
+
+    for state in ("red", "amber", "green", "unknown"):
+        cnt = np.nan_to_num(g(f"n_tl_{state}"), nan=0.0)
+        f[f"vis_tl_{state}_any"] = 1.0 if cnt.max() > 0 else 0.0
+        if state != "unknown":
+            f[f"vis_tl_{state}_frac"] = float((cnt > 0).mean())
     return f
 
 
@@ -244,6 +253,7 @@ def clip_arrays(sub: pd.DataFrame) -> dict:
             "n_traffic_light", "n_stop_sign", "brightness_mean", "motion_mean"]
     cols += [f"n_veh_r{r}c{c}" for r, c in GRID_CELLS]
     cols += [f"area_veh_r{r}c{c}" for r, c in GRID_CELLS]
+    cols += ["n_tl_red", "n_tl_amber", "n_tl_green", "n_tl_unknown"]
     return {c: sub[c].to_numpy(float) for c in cols}
 
 
@@ -318,6 +328,14 @@ def main() -> None:
     assert not (set(VISION_FEATURES) & can_cols), "vis_* collides with a CAN feature"
     assert all(c in out.columns for c in feats), "missing feature after merge"
 
+    lead_g = [c for c in VISION_FEATURES
+              if c.startswith("vis_lead") or c in ("vis_available", "vis_n_frames")]
+    scene_g = [c for c in VISION_FEATURES
+               if c not in lead_g and c not in GRID_VIS and c not in TL_VIS]
+    groups = {"lead": lead_g, "scene": scene_g, "grid": GRID_VIS, "light": TL_VIS}
+    assert sorted(sum(groups.values(), [])) == sorted(VISION_FEATURES), \
+        "vision groups must partition the feature set"
+
     schema_out = {
         **schema,
         "n_rows": int(len(out)),
@@ -347,6 +365,10 @@ def main() -> None:
             "grid": "3x3 occupancy (rows far->near by box centre, cols left->right): "
                     "per-cell vehicle count and summed box area, averaged over the window. "
                     "Defined for every cell (zero when empty).",
+            "light": "traffic-light state read from the colour of each detected light box "
+                     "(red/amber/green hue majority, conservative 'unknown'); window features "
+                     "are any/frac per state, zero-inflated.",
+            "groups": groups,
             "imputation": "none required for vis_* (fully defined); model.encode() still "
                           "medians the CAN columns inside the train fold as before",
         },
@@ -355,7 +377,6 @@ def main() -> None:
     }
     C.FORECAST_SCHEMA_VISION.write_text(json.dumps(schema_out, indent=2, default=str),
                                         encoding="utf-8")
-
     rate = float((out["vis_available"] == 1.0).mean())
     print(f"[vision-table] {len(out):,} rows x {len(VISION_FEATURES)} vis features  "
           f"(available on {rate:.1%} of rows) -> {C.FORECAST_TABLE_VISION}")

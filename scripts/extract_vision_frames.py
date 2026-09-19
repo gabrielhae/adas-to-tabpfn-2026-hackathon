@@ -55,6 +55,13 @@ LEAD_IOU_CONTINUITY = 0.1
 GRID_CELLS = [(r, c) for r in range(3) for c in range(3)]
 GRID_COLS = [f"{m}_veh_r{r}c{c}" for m in ("n", "area") for r, c in GRID_CELLS]
 
+TL_HUE_RED = (10, 170)
+TL_HUE_AMBER = (15, 35)
+TL_HUE_GREEN = (45, 95)
+TL_SAT_MIN = 80
+TL_VAL_MIN = 120
+TL_COLS = ["n_tl_red", "n_tl_amber", "n_tl_green", "n_tl_unknown"]
+
 FRAME_COLS = [
     "car_model", "driver", "route", "clip_id_pub", "vid_kind",
     "t_rel", "frame_idx", "img_w", "img_h",
@@ -62,7 +69,7 @@ FRAME_COLS = [
     "n_traffic_light", "n_stop_sign",
     "lead_present", "lead_conf", "lead_area_frac", "lead_cx_offset", "lead_y2_norm",
     "brightness_mean", "motion_mean",
-] + GRID_COLS
+] + GRID_COLS + TL_COLS
 
 
 def resolve_weights(name: str) -> str:
@@ -136,6 +143,46 @@ def _iou(a: dict, b: dict) -> float:
     return float(inter / ua) if ua > 0 else 0.0
 
 
+def classify_traffic_light(frame, d) -> str:
+    """Heuristic lamp-state read for one traffic-light box.
+
+    COCO only gives us the 'traffic light' box, not its state. The lit lamp is the
+    brightest saturated region in the crop, so we count pixels in the red / amber /
+    green hue bands and take the majority; a weak or colourless crop is 'unknown'.
+    Frames are small (526x330), so this is deliberately conservative.
+    """
+    import cv2
+
+    h, w = frame.shape[:2]
+    x1, y1 = max(0, int(d["x1"])), max(0, int(d["y1"]))
+    x2, y2 = min(w, int(np.ceil(d["x2"]))), min(h, int(np.ceil(d["y2"])))
+    if x2 - x1 < 2 or y2 - y1 < 2:
+        return "unknown"
+    hsv = cv2.cvtColor(frame[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
+    hch, sch, vch = hsv[..., 0], hsv[..., 1], hsv[..., 2]
+    colored = (sch >= TL_SAT_MIN) & (vch >= TL_VAL_MIN)
+    ncol = int(colored.sum())
+    if ncol < 4:
+        return "unknown"
+    hues = hch[colored]
+    red = int(((hues <= TL_HUE_RED[0]) | (hues >= TL_HUE_RED[1])).sum())
+    amber = int(((hues >= TL_HUE_AMBER[0]) & (hues <= TL_HUE_AMBER[1])).sum())
+    green = int(((hues >= TL_HUE_GREEN[0]) & (hues <= TL_HUE_GREEN[1])).sum())
+    best = max(red, amber, green)
+    if best < max(3, 0.25 * ncol):
+        return "unknown"
+    if red == green and red > 0:
+        ry = np.where(colored & ((hch <= TL_HUE_RED[0]) | (hch >= TL_HUE_RED[1])))[0]
+        gy = np.where(colored & (hch >= TL_HUE_GREEN[0]) & (hch <= TL_HUE_GREEN[1]))[0]
+        if ry.size and gy.size:
+            return "red" if ry.mean() <= gy.mean() else "green"
+    if red == best:
+        return "red"
+    if green == best:
+        return "green"
+    return "amber"
+
+
 def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind, prev_lead=None):
     import cv2
 
@@ -147,6 +194,7 @@ def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind, prev_lead=
 
     n_person = n_bicycle = n_tl = n_stop = 0
     vehicles = []
+    tl_dets = []
     for d in dets:
         c = d["cls"]
         if c in VEHICLE_CLASSES:
@@ -157,8 +205,13 @@ def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind, prev_lead=
             n_bicycle += 1
         elif c == TRAFFIC_LIGHT_CLASS:
             n_tl += 1
+            tl_dets.append(d)
         elif c == STOP_SIGN_CLASS:
             n_stop += 1
+
+    tl_counts = {"n_tl_red": 0, "n_tl_amber": 0, "n_tl_green": 0, "n_tl_unknown": 0}
+    for d in tl_dets:
+        tl_counts[f"n_tl_{classify_traffic_light(frame, d)}"] += 1
 
     n_corridor = 0
     for d in vehicles:
@@ -219,6 +272,7 @@ def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind, prev_lead=
         "n_bicycle": n_bicycle,
         "n_traffic_light": n_tl,
         "n_stop_sign": n_stop,
+        **tl_counts,
         "lead_present": lead_present,
         "lead_conf": lead_conf,
         "lead_area_frac": lead_area,
