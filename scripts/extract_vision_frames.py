@@ -52,6 +52,9 @@ NEAR_FIELD_Y2 = 0.55
 CORRIDOR_MIN_Y2 = 0.30
 LEAD_IOU_CONTINUITY = 0.1
 
+GRID_CELLS = [(r, c) for r in range(3) for c in range(3)]
+GRID_COLS = [f"{m}_veh_r{r}c{c}" for m in ("n", "area") for r, c in GRID_CELLS]
+
 FRAME_COLS = [
     "car_model", "driver", "route", "clip_id_pub", "vid_kind",
     "t_rel", "frame_idx", "img_w", "img_h",
@@ -59,7 +62,7 @@ FRAME_COLS = [
     "n_traffic_light", "n_stop_sign",
     "lead_present", "lead_conf", "lead_area_frac", "lead_cx_offset", "lead_y2_norm",
     "brightness_mean", "motion_mean",
-]
+] + GRID_COLS
 
 
 def resolve_weights(name: str) -> str:
@@ -163,6 +166,20 @@ def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind, prev_lead=
         if CORRIDOR_LEFT * w <= cx <= CORRIDOR_RIGHT * w and d["y2"] >= CORRIDOR_MIN_Y2 * h:
             n_corridor += 1
 
+    # 3x3 occupancy grid: rows far(0) -> near(2) by box centre height, columns
+    # left(0) -> right(2). Counts and summed box area are defined for every cell
+    # (zero when empty), so traffic location never becomes missing data.
+    grid_cnt = {k: 0 for k in GRID_CELLS}
+    grid_area = {k: 0.0 for k in GRID_CELLS}
+    for d in vehicles:
+        cx = (d["x1"] + d["x2"]) / 2.0
+        cy = (d["y1"] + d["y2"]) / 2.0
+        c = 0 if cx < w / 3 else (1 if cx < 2 * w / 3 else 2)
+        r = 0 if cy < h / 3 else (1 if cy < 2 * h / 3 else 2)
+        grid_cnt[(r, c)] += 1
+        grid_area[(r, c)] += max(0.0, d["x2"] - d["x1"]) * \
+            max(0.0, d["y2"] - d["y1"]) / (w * h)
+
     # Any vehicle centred in the ego-lane corridor is a lead candidate, regardless
     # of how near it is (the old rule dropped distant leads because their box sits
     # high in the frame). Prefer the previous frame's lead when it still overlaps,
@@ -196,6 +213,8 @@ def frame_scalars(dets, frame, prev_gray, t_rel, frame_idx, vid_kind, prev_lead=
         "img_h": int(h),
         "n_vehicles": len(vehicles),
         "n_corridor_vehicles": n_corridor,
+        **{f"n_veh_r{r}c{c}": grid_cnt[(r, c)] for r, c in GRID_CELLS},
+        **{f"area_veh_r{r}c{c}": grid_area[(r, c)] for r, c in GRID_CELLS},
         "n_person": n_person,
         "n_bicycle": n_bicycle,
         "n_traffic_light": n_tl,

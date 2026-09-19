@@ -37,6 +37,10 @@ DEC_COL = "decision_t_s"
 EPS = 1e-9
 NAN = float("nan")
 
+GRID_CELLS = [(r, c) for r in range(3) for c in range(3)]
+GRID_VIS = ([f"vis_grid_cnt_mean_r{r}c{c}" for r, c in GRID_CELLS]
+            + [f"vis_grid_area_mean_r{r}c{c}" for r, c in GRID_CELLS])
+
 VISION_FEATURES = [
     "vis_available",
     "vis_n_frames",
@@ -71,7 +75,7 @@ VISION_FEATURES = [
     "vis_any_traffic_light",
     "vis_brightness_mean",
     "vis_motion_mean",
-]
+] + GRID_VIS
 
 
 def _finite(x) -> np.ndarray:
@@ -226,6 +230,10 @@ def window_vis(a: dict, lo: float, hi: float) -> dict:
 
     f["vis_brightness_mean"] = _fmean0(g("brightness_mean"))
     f["vis_motion_mean"] = _fmean0(g("motion_mean"))
+
+    for r, c in GRID_CELLS:
+        f[f"vis_grid_cnt_mean_r{r}c{c}"] = _fmean0(g(f"n_veh_r{r}c{c}"))
+        f[f"vis_grid_area_mean_r{r}c{c}"] = _fmean0(g(f"area_veh_r{r}c{c}"))
     return f
 
 
@@ -234,6 +242,8 @@ def clip_arrays(sub: pd.DataFrame) -> dict:
     cols = ["t_rel", "lead_present", "lead_area_frac", "lead_cx_offset", "lead_y2_norm",
             "lead_conf", "n_vehicles", "n_corridor_vehicles", "n_person", "n_bicycle",
             "n_traffic_light", "n_stop_sign", "brightness_mean", "motion_mean"]
+    cols += [f"n_veh_r{r}c{c}" for r, c in GRID_CELLS]
+    cols += [f"area_veh_r{r}c{c}" for r, c in GRID_CELLS]
     return {c: sub[c].to_numpy(float) for c in cols}
 
 
@@ -334,6 +344,9 @@ def main() -> None:
                 "(0/1) records presence, so no median imputation of a non-existent lead "
                 "can happen. All vis_* columns are defined on every row."
             ),
+            "grid": "3x3 occupancy (rows far->near by box centre, cols left->right): "
+                    "per-cell vehicle count and summed box area, averaged over the window. "
+                    "Defined for every cell (zero when empty).",
             "imputation": "none required for vis_* (fully defined); model.encode() still "
                           "medians the CAN columns inside the train fold as before",
         },
