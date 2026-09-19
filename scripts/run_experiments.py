@@ -14,6 +14,7 @@ Tasks:
 Usage:
   python scripts/run_experiments.py                 # auto (tabpfn if available else lightgbm)
   python scripts/run_experiments.py --models logistic lightgbm
+  python scripts/run_experiments.py --table forecast   # features end at t=-delta (forecast)
 """
 from __future__ import annotations
 
@@ -38,9 +39,13 @@ from sklearn.metrics import (balanced_accuracy_score, f1_score, mean_absolute_er
                              r2_score, accuracy_score)
 
 
-def load():
-    df = pd.read_parquet(C.MODEL_TABLE)
-    schema = json.loads(C.SCHEMA_JSON.read_text(encoding="utf-8"))
+def load(table: str = "model"):
+    if table == "forecast":
+        df = pd.read_parquet(C.FORECAST_TABLE)
+        schema = json.loads(C.FORECAST_SCHEMA.read_text(encoding="utf-8"))
+    else:
+        df = pd.read_parquet(C.MODEL_TABLE)
+        schema = json.loads(C.SCHEMA_JSON.read_text(encoding="utf-8"))
     return df, schema
 
 
@@ -109,9 +114,28 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--models", nargs="+", default=["auto"])
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--table", choices=["model", "forecast"], default="model",
+                    help="'model' = M1 (features [-5,0]); "
+                         "'forecast' = sliding forecast table (build_forecast_table.py)")
+    ap.add_argument("--lead", type=float, default=None,
+                    help="evaluate only rows with this lead_s (sliding table only)")
     args = ap.parse_args()
 
-    df, schema = load()
+    df, schema = load(args.table)
+    if args.lead is not None:
+        if "lead_s" not in df.columns:
+            raise SystemExit("--lead requires the sliding forecast table")
+        df = df[df["lead_s"] == args.lead].copy()
+        print(f"filtered to lead_s = {args.lead}s  ({len(df):,} rows)")
+    if args.table == "forecast":
+        sl = schema.get("sliding")
+        if sl:
+            print(f"forecast table: sliding W={sl['window_s']}s stride={sl['stride_s']}s "
+                  f"leads {sl['lead_min_s']}..{sl['lead_max_s']}s "
+                  f"({sl['n_windows_per_clip']} windows/clip)")
+        else:
+            print(f"forecast table: feature window={schema.get('feature_window')}")
+        print(f"                target window={schema.get('target_window')}")
     print(f"model table: {len(df):,} rows x {len(schema['features_numeric'])} numeric features")
 
     ok, why = M.tabpfn_available()
@@ -168,7 +192,8 @@ def main():
                   f"macroF1={r['mean']['macro_f1']:.3f}  brands={r['n_folds']}")
             rows.append(r)
 
-    out = C.RESULTS / "m1_results.json"
+    stem = "m1_results" if args.table == "model" else "forecast_results"
+    out = C.RESULTS / f"{stem}.json"
     out.write_text(json.dumps(rows, indent=2, default=str), encoding="utf-8")
     print(f"\nwrote {out}")
 
@@ -177,7 +202,7 @@ def main():
          "split": r.get("split"), "stratum": r.get("stratum"),
          **{k: round(v, 4) for k, v in r["mean"].items()}}
         for r in rows])
-    tab.to_csv(C.RESULTS / "m1_results.csv", index=False)
+    tab.to_csv(C.RESULTS / f"{stem}.csv", index=False)
     print("\n===== SUMMARY =====")
     print(tab.to_string(index=False))
 

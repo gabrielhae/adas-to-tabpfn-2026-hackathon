@@ -30,6 +30,8 @@ MODEL_TABLE = DERIVED / "model_table.parquet"
 CLIP_INDEX = DERIVED / "clip_index.parquet"
 TELEMETRY_DIR = DERIVED / "telemetry"          # per-clip 20 Hz json
 SCHEMA_JSON = DERIVED / "schema.json"
+FORECAST_TABLE = DERIVED / "forecast_table.parquet"
+FORECAST_SCHEMA = DERIVED / "forecast_schema.json"
 
 # --- experiment constants (documented, verified) ----------------------------
 RESAMPLE_HZ = 20            # NEVER above 20: qlog model data is 1.3 Hz
@@ -44,6 +46,13 @@ TRIGGER_WINDOW = (-3.0, 0.5)   # overlaps PRE -> source of label leakage
 # leakage-safe windows we recompute ourselves
 SAFE_PRE_WINDOW = (-10.0, -3.0)   # strictly before any takeover action
 SAFE_POST_WINDOW = (0.0, 5.0)
+
+# --- forecast: end the feature window at t = -DELTA -------------------------
+# The only change that turns M1 into a forecast: features are aggregated over
+# [-10, -DELTA] (strictly before the takeover) instead of the repo's [-5, 0].
+# Targets stay in the post window [0, +5].
+FORECAST_DELTA_S = float(os.environ.get("ADAS_TO_DELTA_S", "3.0"))
+FEATURE_WINDOW = (-10.0, -FORECAST_DELTA_S)   # feature window ends at -DELTA
 
 # robust TTC/THW guards, from ADAS-TO/Code/configs/analysis_thresholds.yaml
 ANALYSIS = {
