@@ -28,10 +28,11 @@ in tabular CAN features alone? The gap between that and 59.3% is the measured va
 7. [Feature dictionary](#feature-dictionary)
 8. [Target dictionary](#target-dictionary)
 9. [Results so far](#results-so-far)
-10. [Methodological guardrails](#methodological-guardrails)
-11. [Repository layout](#repository-layout)
-12. [Enabling TabPFN](#enabling-tabpfn)
-13. [Roadmap](#roadmap)
+10. [Vision features (YOLOv8n)](#vision-features-yolov8n)
+11. [Methodological guardrails](#methodological-guardrails)
+12. [Repository layout](#repository-layout)
+13. [Enabling TabPFN](#enabling-tabpfn)
+14. [Roadmap](#roadmap)
 
 ---
 
@@ -43,7 +44,7 @@ in tabular CAN features alone? The gap between that and 59.3% is the measured va
 | **M1** data + eval harness | ✅ 1,043 labelled clips, 69 features, 3 tasks, driver-disjoint + brand-disjoint CV |
 | **M2** explorer backend | ✅ FastAPI, 8 endpoints |
 | **M3** clip viewer (video + telemetry) | ✅ 20 Hz resampler, synced uPlot panels, alignment verified |
-| **M4** early-warning task | ⏳ not started |
+| **M4** early-warning task | ✅ sliding forecast table + YOLOv8n vision ablation (null result) |
 | **M5** polish / figures | ⏳ not started |
 
 **Blocker:** TabPFN ≥ v6 requires a one-time licence acceptance tied to a PriorLabs account.
@@ -59,7 +60,7 @@ is reproducible today, and TabPFN drops in with no code change. See [Enabling Ta
 py -3.11 -m venv .venv
 .venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu128
 .venv\Scripts\python.exe -m pip install tabpfn pandas numpy pyarrow scikit-learn fastapi \
-    "uvicorn[standard]" plotly matplotlib opencv-python lightgbm huggingface_hub
+    "uvicorn[standard]" plotly matplotlib opencv-python lightgbm huggingface_hub ultralytics
 
 # 2. data (2.2 GiB, auto-gated so it works immediately)
 hf download HenryYHW/ADAS-TO-Sample --type dataset --local-dir data\ADAS-TO-Sample
@@ -77,6 +78,8 @@ hf download HenryYHW/ADAS-TO-Sample --type dataset --local-dir data\ADAS-TO-Samp
 ```
 
 Other scripts: `scripts\qa_alignment.py 40` (alignment QA), `scripts\test_api.ps1` (endpoint smoke test).
+Vision ablation (optional): `scripts\extract_vision_frames.py` → `scripts\build_vision_table.py` →
+`scripts\qa_vision_alignment.py 80` → `scripts\run_vision_experiments.py`.
 
 > The full 15,659-clip corpus lives at `HenryYHW/ADAS-TO`, which is **`gated: manual`** and
 > currently awaiting author approval. Nothing in this project depends on it — everything runs on the
@@ -516,6 +519,77 @@ LightGBM stands in for TabPFN until a token is set.
 
 ---
 
+## Vision features (YOLOv8n)
+
+The paper's 59.3% early-cue figure comes from a vision-language model. The cheap,
+interpretable counterpart is to add **structured YOLOv8n geometry** as extra columns
+beside the CAN features and ask whether the sliding forecast improves. It does not —
+this is reported as a null result.
+
+### Pipeline (run in order)
+
+| step | script | output |
+|---|---|---|
+| 1 | `scripts/extract_vision_frames.py` | `data/derived/vision_frames.{parquet,csv}` |
+| 2 | `scripts/build_vision_table.py` | `data/derived/vision_table.parquet`, `forecast_table_vision.parquet`, `forecast_schema_vision.json` |
+| 3 | `scripts/qa_vision_alignment.py 80` | `results/vision_alignment.json`, `results/vision_qa_grid.png` |
+| 4 | `scripts/run_vision_experiments.py --brand` | `results/vision_results.{json,csv}`, `vision_ablation.csv`, `vision_by_lead.csv` |
+
+1. **Per-frame extraction.** Decode each clip's `takeover.mp4` once, sequentially at
+   **5 Hz** (100 frames/clip), and run **YOLOv8n** (`conf 0.35`, `imgsz 640`, GPU) in
+   batches. 1,041 clips / **104,059 frames** in ~5 min. Per-frame scalars: vehicle /
+   corridor-vehicle / person / bicycle / traffic-light / stop-sign counts, lead-box
+   geometry (`area_frac`, signed `cx_offset`, `y2_norm`, `conf`), frame brightness and
+   frame-to-frame motion.
+
+2. **Window aggregation.** The same windows as the CAN forecast table — closed
+   `[s − 3.5, s]`, `W` read from `forecast_schema.json` — giving 14,574 rows × 33
+   `vis_*` columns. `vis_n_frames` averages 18 per window (expected `W × 5 = 17.5`).
+
+3. **Alignment.** `t_rel = frame_idx / CAP_PROP_FPS − 10.0`, i.e. clip-relative video
+   time with the takeover at 0 — the same axis as `build_clip_telemetry`'s `t`, using the
+   by-construction fact that `video_time_s − clip_start_s == 10.0`. The QA gate samples
+   (clip, window) rows, correlates `1/√lead_area_frac` against radar `leadOne.dRel`, and
+   writes a contact sheet. It passes: **median Spearman 0.67, 76% of usable clips
+   positive**, and the contact sheet shows the box tracking the car ahead.
+
+4. **Encoding — no imputation of a non-existent lead.** A window with no detected lead is
+   a real observation, not missing data. So the lead block uses a **zero-inflated**
+   encoding: geometry is `0.0` when absent and `vis_lead_available` (0/1) records whether
+   a lead was there at all. This stops `model.encode()` from median-imputing a "typical
+   lead" into an empty lane; all 33 `vis_*` columns are defined on every row.
+
+### Ablation (driver-disjoint `GroupKFold(5)`, full table)
+
+CAN-only reproduces `results/forecast_by_lead.csv` / `forecast_results.json` exactly,
+which is the check that the three arms are comparable.
+
+| task / metric | model | CAN | vision only | CAN + vision |
+|---|---|---|---|---|
+| `post_maneuver_type` bal-acc | tabpfn | **0.300** | 0.275 | 0.290 |
+| `post_max_abs_steer_torque` R² | tabpfn | 0.639 | −0.272 | **0.655** |
+| `post_max_abs_steer_torque` R² | lightgbm | 0.514 | −0.517 | **0.577** |
+| `post_max_abs_jerk_mps3` R² | tabpfn | **0.000** | −0.060 | −0.005 |
+| `post_maneuver_type` bal-acc (brand-OOD) | tabpfn | **0.283** | 0.298 | 0.266 |
+
+### Reading it honestly
+
+- **Vision-only is far worse than CAN everywhere.** Frame geometry at 5 Hz cannot stand
+  in for the kinematic state, which is expected.
+- **CAN + vision shows no consistent gain.** TabPFN steer-torque edges up (0.639 → 0.655)
+  and LightGBM's jumps more (0.514 → 0.577), but neither reproduces in the per-lead
+  breakdown, where `both` simply tracks `can` at every lead, and classification does not
+  improve. A single-metric bump under 5-fold CV with a 13.4%-of-data top driver is not
+  evidence of signal.
+- **The limiting factor is the detector, not the model.** Vision finds a lead in only
+  ~36% of the windows where radar reports one, so the lead-geometry block is mostly the
+  zero sentinel. The null result therefore means "YOLOv8n geometry at this sampling rate
+  adds nothing on top of radar", not "vision is useless".
+- The per-lead table (`results/vision_by_lead.csv`) shares `forecast_by_lead.csv`'s schema
+  so the CAN baselines can be diffed line-for-line.
+
+---
+
 ## Methodological guardrails
 
 These are the traps we found and how each is handled. They are the difference between a real
@@ -568,7 +642,13 @@ TabPFN-Hackathon2026/
 │   └── derived/
 │       ├── clip_index.parquet   1,591 clips: paths, meta, video
 │       ├── model_table.parquet  1,043 labelled clips × features + targets
-│       └── schema.json          feature/target/group definitions + class balance
+│       ├── schema.json          feature/target/group definitions + class balance
+│       ├── forecast_table.parquet       14,574 rows: sliding CAN forecast
+│       ├── forecast_schema.json         sliding-window definition + decision times
+│       ├── vision_frames.parquet        104,059 per-frame YOLOv8n scalars
+│       ├── vision_table.parquet         33 vis_* columns per forecast row
+│       ├── forecast_table_vision.parquet  CAN + vision (3-arm ablation source)
+│       └── forecast_schema_vision.json   vision-augmented schema
 ├── src/adas_to/
 │   ├── config.py                paths, windows, thresholds, TabPFN token lookup
 │   ├── telemetry.py             8 CSVs → 20 Hz grid + TTC/THW + warnings
@@ -578,6 +658,11 @@ TabPFN-Hackathon2026/
 │   └── static/index.html        single-file UI (vanilla JS + uPlot)
 ├── scripts/
 │   ├── build_dataset.py         clip index + model table + leakage assertion
+│   ├── build_forecast_table.py  sliding-window CAN forecast table
+│   ├── extract_vision_frames.py YOLOv8n per-frame vision scalars
+│   ├── build_vision_table.py    vision windows + zero-inflated encoding
+│   ├── qa_vision_alignment.py   vision↔radar QA + contact sheet
+│   ├── run_vision_experiments.py  CAN / vision / both 3-arm ablation
 │   ├── run_experiments.py       CV harness, log-rate sensitivity, brand-OOD
 │   ├── qa_alignment.py          event-alignment QA
 │   ├── check_json.py            strict-JSON safety check

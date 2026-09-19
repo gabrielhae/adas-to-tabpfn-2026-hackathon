@@ -23,7 +23,8 @@ PER_CLIP = REPO_CODE / "stats_output" / "per_clip.csv"
 # --- outputs ----------------------------------------------------------------
 DERIVED = ROOT / "data" / "derived"
 RESULTS = ROOT / "results"
-for _p in (DERIVED, RESULTS):
+VISION_DIR = DERIVED / "vision"                # detector weights + caches
+for _p in (DERIVED, RESULTS, VISION_DIR):
     _p.mkdir(parents=True, exist_ok=True)
 
 MODEL_TABLE = DERIVED / "model_table.parquet"
@@ -32,6 +33,17 @@ TELEMETRY_DIR = DERIVED / "telemetry"          # per-clip 20 Hz json
 SCHEMA_JSON = DERIVED / "schema.json"
 FORECAST_TABLE = DERIVED / "forecast_table.parquet"
 FORECAST_SCHEMA = DERIVED / "forecast_schema.json"
+
+# --- vision (YOLOv8n structured geometry) -----------------------------------
+VISION_FRAMES = DERIVED / "vision_frames.parquet"
+VISION_FRAMES_CSV = DERIVED / "vision_frames.csv"
+VISION_TABLE = DERIVED / "vision_table.parquet"
+FORECAST_TABLE_VISION = DERIVED / "forecast_table_vision.parquet"
+FORECAST_SCHEMA_VISION = DERIVED / "forecast_schema_vision.json"
+VISION_FPS = 5.0                                # decode/detection sampling rate (Hz)
+YOLO_MODEL = "yolov8n.pt"
+YOLO_CONF = 0.35
+YOLO_IMGSZ = 640
 
 # --- experiment constants (documented, verified) ----------------------------
 RESAMPLE_HZ = 20            # NEVER above 20: qlog model data is 1.3 Hz
