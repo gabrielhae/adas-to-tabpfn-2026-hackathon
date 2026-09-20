@@ -24,7 +24,8 @@ PER_CLIP = REPO_CODE / "stats_output" / "per_clip.csv"
 DERIVED = ROOT / "data" / "derived"
 RESULTS = ROOT / "results"
 VISION_DIR = DERIVED / "vision"                # detector weights + caches
-for _p in (DERIVED, RESULTS, VISION_DIR):
+FLOW_DIR = DERIVED / "flow"                    # optical-flow caches
+for _p in (DERIVED, RESULTS, VISION_DIR, FLOW_DIR):
     _p.mkdir(parents=True, exist_ok=True)
 
 MODEL_TABLE = DERIVED / "model_table.parquet"
@@ -44,6 +45,18 @@ VISION_FPS = 5.0                                # decode/detection sampling rate
 YOLO_MODEL = "yolov8n.pt"
 YOLO_CONF = 0.35
 YOLO_IMGSZ = 640
+
+# --- flow (ego-motion-compensated optical flow / independently moving objects) --
+FLOW_FRAMES = DERIVED / "flow_frames.parquet"
+FLOW_FRAMES_CSV = DERIVED / "flow_frames.csv"
+FLOW_TABLE = DERIVED / "flow_table.parquet"
+FORECAST_TABLE_FLOW = DERIVED / "forecast_table_flow.parquet"
+FORECAST_SCHEMA_FLOW = DERIVED / "forecast_schema_flow.json"
+FLOW_HZ = 10.0                    # decode/flow sampling rate (Hz)
+FLOW_METHOD = "raft"              # "dis" (fast, noisy at 526x330) | "raft" (torchvision)
+FLOW_RAFT_W, FLOW_RAFT_H = 256, 160   # RAFT working resolution (upscaled to the frame)
+FLOW_RANSAC_REPROJ_PX = 3.0       # estimateAffinePartial2D RANSAC threshold
+FLOW_HOOD_FRAC = 0.15             # bottom fraction of the frame masked from the global fit
 
 # --- experiment constants (documented, verified) ----------------------------
 RESAMPLE_HZ = 20            # NEVER above 20: qlog model data is 1.3 Hz
