@@ -15,6 +15,7 @@ framed as early warning *"beyond late-stage kinematic triggers."*
 So TabPFN's job here is to be the **kinematic-only baseline**: how much early-warning signal exists
 in tabular CAN features alone? The gap between that and 59.3% is the measured value of adding vision.
 
+
 ---
 
 ## Contents
@@ -48,7 +49,7 @@ in tabular CAN features alone? The gap between that and 59.3% is the measured va
 | **M4** early-warning task | ✅ sliding forecast table + YOLOv8n vision ablation + ego-motion-compensated flow ablation (null results) |
 | **M5** polish / figures | ⏳ not started |
 
-**Blocker:** TabPFN ≥ v6 requires a one-time licence acceptance tied to a PriorLabs account.
+TabPFN ≥ v6 requires a one-time licence acceptance tied to a PriorLabs account.
 Until `TABPFN_TOKEN` is set, the pipeline automatically runs LightGBM instead — every result below
 is reproducible today, and TabPFN drops in with no code change. See [Enabling TabPFN](#enabling-tabpfn).
 
@@ -61,7 +62,8 @@ is reproducible today, and TabPFN drops in with no code change. See [Enabling Ta
 py -3.11 -m venv .venv
 .venv\Scripts\python.exe -m pip install torch --index-url https://download.pytorch.org/whl/cu128
 .venv\Scripts\python.exe -m pip install tabpfn pandas numpy pyarrow scikit-learn fastapi \
-    "uvicorn[standard]" plotly matplotlib opencv-python lightgbm huggingface_hub ultralytics
+    "uvicorn[standard]" plotly matplotlib opencv-python lightgbm xgboost catboost \
+    huggingface_hub ultralytics
 
 # 2. data (2.2 GiB, auto-gated so it works immediately)
 hf download HenryYHW/ADAS-TO-Sample --type dataset --local-dir data\ADAS-TO-Sample
@@ -93,7 +95,7 @@ Vision ablation (optional): `scripts\extract_vision_frames.py` → `scripts\buil
 
 | | |
 |---|---|
-| Source | `HenryYHW/ADAS-TO-Sample` (gated: **auto** → instant) |
+| Source | `HenryYHW/ADAS-TO-Sample` |
 | Clips on disk | **1,591** (the dataset card says 1,570) |
 | Size / files | 3.21 GiB, 15,912 files |
 | Structure | `<CAR_MODEL>/<driver_XXX>/<route_XXX>/<clip_id>/` × 10 files |
@@ -367,6 +369,17 @@ It mirrors the CV protocol exactly, for one clip:
 
 It flags `degenerate: true` when the training set is suspiciously small, and falls back
 TabPFN → LightGBM automatically when no token is present.
+
+### Model comparison
+
+Four models are trained and scored on the same fixed split: **TabPFN, LightGBM,
+XGBoost, CatBoost** (`COMPARE_MODELS` in `config.py`). `scripts/score_test.py` fits each
+on train+val and scores all 209 test clips, writing `results/test_scores.json`
+(served at `/api/score`, shown top-left in the explorer). `/api/predict` returns all
+four models' probabilities for the selected clip, which the Prediction card renders as
+four side-by-side columns with alphabetically ordered class bars. On this 10% sample the
+boosted trees edge out TabPFN on balanced accuracy (~0.49 vs ~0.45) and steer-torque R²
+is comparable across all four.
 
 ---
 
@@ -872,9 +885,6 @@ and may need a third discriminator (`clip_dur_s`).
   year   = {2026}
 }
 ```
-
-> Note the dataset card's own BibTeX gives `Zhou, Haowei` and the GitHub README says
-> `Anonymous Authors` — both are wrong. The arXiv listing above is correct.
 
 ADAS-TO is released under **CC BY-NC 4.0** (non-commercial). Video and CAN logs are from real
 public roads; the released identifiers are anonymised.
