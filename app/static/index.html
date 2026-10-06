@@ -512,8 +512,10 @@ async function runPredict(key) {
     let html = `<div>target <b>${d.target}</b> · ${d.trained_on || 'leave-driver-out'}` +
       `${d.n_train ? ` (n=${d.n_train})` : ''}</div>`;
     if (d.probabilities) {
-      const rows = Object.entries(d.probabilities).sort((a, b) => b[1] - a[1]);
-      const top = rows[0][0];
+      const entries = Object.entries(d.probabilities);
+      // display order is fixed alphabetical; `top` (the prediction) is still argmax
+      const top = entries.reduce((m, e) => (e[1] > m[1] ? e : m), entries[0])[0];
+      const rows = [...entries].sort((a, b) => a[0].localeCompare(b[0]));
       const correct = top === d.actual;
       html += `<div style="margin-top:6px">model predicts <b>${top}</b> ` +
         `<span class="verdict ${correct ? 'ok' : 'bad'}">` +
