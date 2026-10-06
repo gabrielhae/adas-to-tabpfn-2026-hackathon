@@ -1,8 +1,0 @@
-.venv/
-data/
-_recon/
-__pycache__/
-*.pyc
-.playwright-mcp/
-*.log
-.DS_Store
