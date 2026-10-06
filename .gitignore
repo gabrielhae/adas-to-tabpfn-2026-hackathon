@@ -1,3 +1,9 @@
 .venv/
 data/
 _recon/
+dist/
+__pycache__/
+.playwright-mcp/
+ADAS-TO/
+results/server.*
+*.pptx
