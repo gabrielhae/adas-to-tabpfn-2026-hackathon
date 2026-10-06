@@ -5,6 +5,8 @@ generation for ADAS systems training. The **ADAS-TO** dataset (Wang, Xu, Sun & Z
 [arXiv:2603.06986](https://arxiv.org/abs/2603.06986)) caught my eye, with the goal of seeing whether
 non-tabular data could be used in a tabular foundation-model context.
 
+A summary of results can be found in a presentation located ADAS-TO & TabPFN3.5 Preliminary Investigations.pdf
+
 This repo is an interactive explorer for the dataset plus a leakage-controlled tabular modelling
 pipeline built around **TabPFN 3.5**. It answers a question the paper leaves open: ADAS-TO is a
 *dataset + empirical-characterisation* paper with **no machine-learning baseline**, and its headline
@@ -12,6 +14,9 @@ figure — **"59.3% of critical takeovers have actionable visual cues ≥3 s ear
 **vision-language model**. TabPFN's job here is the **kinematic-only baseline**: how much
 early-warning signal exists in tabular CAN features alone? The gap to 59.3% is the measured value of
 adding vision.
+
+> A summary of results can be found in the presentation
+> [ADAS-TO & TabPFN3.5 Preliminary Investigations.pdf](results/ADAS-TO%20%26%20TabPFN3.5%20Preliminary%20Investigations.pdf).
 
 ---
 
@@ -130,6 +135,9 @@ are in [docs/pipeline.md](docs/pipeline.md).
 ---
 
 ## Results
+
+A summary of results can be found in the presentation
+[ADAS-TO & TabPFN3.5 Preliminary Investigations.pdf](results/ADAS-TO%20%26%20TabPFN3.5%20Preliminary%20Investigations.pdf).
 
 Driver-disjoint 5-fold CV on the 1,043 labelled clips, 69 features.
 LightGBM stands in for TabPFN until a token is set.
