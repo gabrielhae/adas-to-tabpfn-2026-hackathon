@@ -39,6 +39,7 @@ FORECAST_SCHEMA = DERIVED / "forecast_schema.json"
 # Driver-disjoint (the paper's stated protocol). See src/adas_to/splits.py.
 SPLIT_ASSIGNMENTS = DERIVED / "splits.parquet"   # dongle_id -> split
 SPLIT_META = DERIVED / "split_meta.json"         # summary written by build_splits.py
+TEST_SCORES = RESULTS / "test_scores.json"       # batch score over the test split
 SPLIT_FRACTIONS = {"train": 0.6, "val": 0.2, "test": 0.2}
 SPLIT_SEED = 0
 

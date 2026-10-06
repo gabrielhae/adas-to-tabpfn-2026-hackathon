@@ -128,6 +128,17 @@ def api_model():
             "note": "TabPFN needs a one-time license acceptance; set TABPFN_TOKEN."}
 
 
+@app.get("/api/score")
+def api_score():
+    """Batch score over the whole test split (scripts/score_test.py)."""
+    if not C.TEST_SCORES.exists():
+        return {"available": False,
+                "note": "run scripts/score_test.py to score the test split"}
+    out = json.loads(C.TEST_SCORES.read_text(encoding="utf-8"))
+    out["available"] = True
+    return out
+
+
 @app.get("/api/index")
 def api_index(brand: str | None = None, log_kind: str | None = None,
               trigger: str | None = None, scenario: str | None = None,

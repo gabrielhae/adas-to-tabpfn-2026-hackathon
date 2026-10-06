@@ -23,6 +23,16 @@
   .brand{padding:14px 16px;border-bottom:1px solid var(--line)}
   .brand h1{margin:0;font-size:15px;letter-spacing:.3px}
   .brand p{margin:4px 0 0;color:var(--muted);font-size:11px}
+  .scorecard{padding:10px 16px 12px;border-bottom:1px solid var(--line);
+             background:var(--panel2)}
+  .scorecard h3{margin:0 0 3px;font-size:10px;text-transform:uppercase;
+                letter-spacing:.6px;color:var(--muted)}
+  .scorecard .big{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;
+                  line-height:1.15}
+  .scorecard .big span{font-size:11px;font-weight:400;color:var(--muted)}
+  .scorecard .metrics{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:3px;
+                      font-size:11px;color:var(--muted)}
+  .scorecard .metrics b{color:var(--fg);font-variant-numeric:tabular-nums}
   .filters{padding:12px 16px;border-bottom:1px solid var(--line)}
   .filters label{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;
                  letter-spacing:.6px;margin:8px 0 3px}
@@ -131,6 +141,7 @@
       <h1>ADAS‑TO Explorer</h1>
       <p id="subtitle">loading…</p>
     </div>
+    <div class="scorecard" id="scorecard" style="display:none"></div>
     <div class="filters">
       <label>Search</label>
       <input id="q" placeholder="model / driver / route"/>
@@ -548,18 +559,42 @@ async function loadList() {
     </div>`).join('') || '<div id="loading">no clips</div>';
   document.querySelectorAll('.clip').forEach(e =>
     e.addEventListener('click', () => loadClip(e.dataset.key)));
-  $('#subtitle').textContent = `${d.total} clips match · ${VIEW_TOTAL} total`;
+  $('#subtitle').textContent =
+    `${d.total} match · ${VIEW_TOTAL} ${SPLIT_SCOPE || 'clips'}`;
+}
+let SPLIT_SCOPE = '';
+
+function renderScore(s) {
+  const el = $('#scorecard');
+  const c = s && s.classification;
+  if (!s || !s.available || !c) { el.style.display = 'none'; return; }
+  const reg = s.regression && s.regression.post_max_abs_steer_torque;
+  el.style.display = 'block';
+  el.innerHTML = `
+    <h3>Test-set score · ${s.model}</h3>
+    <div class="big">${(c.balanced_accuracy * 100).toFixed(1)}% <span>balanced acc</span></div>
+    <div class="metrics">
+      <span>macro F1 <b>${c.macro_f1.toFixed(3)}</b></span>
+      <span>acc <b>${c.accuracy.toFixed(3)}</b></span>
+      <span>chance <b>${c.chance.toFixed(2)}</b></span>
+    </div>
+    <div class="metrics">
+      <span>${s.n_test} clips · ${s.n_test_drivers} drivers</span>
+      ${reg ? `<span>steer R² <b>${reg.r2.toFixed(2)}</b></span>` : ''}
+    </div>`;
 }
 
 let VIEW_TOTAL = 0;
 async function boot() {
-  const [fac, mdl] = await Promise.all([
+  const [fac, mdl, sc] = await Promise.all([
     fetch('/api/facets').then(r => r.json()),
     fetch('/api/model').then(r => r.json()),
+    fetch('/api/score').then(r => r.json()),
   ]);
+  renderScore(sc);
   VIEW_TOTAL = fac.n_clips;
-  const scope = (fac.split && fac.split.shown === 'test') ? 'test split' : 'all clips';
-  $('#subtitle').textContent = `${scope} · ${fac.n_clips} clips · ${fac.n_labelled} labelled · TabPFN ${mdl.tabpfn_available ? 'ready' : 'needs token'}`;
+  SPLIT_SCOPE = (fac.split && fac.split.shown === 'test') ? 'test-split clips' : 'clips';
+  $('#subtitle').textContent = `${SPLIT_SCOPE} · ${fac.n_labelled} labelled · TabPFN ${mdl.tabpfn_available ? 'ready' : 'needs token'}`;
   opts('#f_brand', fac.brand, 'brands');
   opts('#f_trigger', fac.primary_trigger, 'triggers');
   opts('#f_log', fac.log_kind, 'log kinds');

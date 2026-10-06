@@ -827,6 +827,8 @@ TabPFN-Hackathon2026/
 │   ├── qa_flow_alignment.py     residual-flow↔radar QA + contact sheet
 │   ├── run_flow_experiments.py  CAN / flow / both 3-arm ablation
 │   ├── run_experiments.py       CV harness, log-rate sensitivity, brand-OOD
+│   ├── build_splits.py          driver-disjoint train/val/test split -> splits.parquet
+│   ├── score_test.py            batch score of the test split -> results/test_scores.json
 │   ├── qa_alignment.py          event-alignment QA
 │   ├── check_json.py            strict-JSON safety check
 │   └── test_api.ps1             endpoint smoke test
