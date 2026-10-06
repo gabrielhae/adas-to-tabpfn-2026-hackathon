@@ -7,3 +7,4 @@ __pycache__/
 ADAS-TO/
 results/server.*
 *.pptx
+.kilo/plans/
