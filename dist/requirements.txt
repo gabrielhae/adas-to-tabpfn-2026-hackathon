@@ -1,0 +1,26 @@
+# Core pipeline + explorer
+tabpfn>=9.0.0
+pandas
+numpy
+pyarrow
+scikit-learn
+scipy
+fastapi
+uvicorn[standard]
+matplotlib
+plotly
+opencv-python
+huggingface_hub
+
+# Boosting baselines
+lightgbm
+xgboost
+catboost
+
+# Vision / optical-flow feature extraction (GPU)
+ultralytics
+torch
+torchvision
+
+# Slides
+python-pptx
