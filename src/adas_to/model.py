@@ -115,6 +115,30 @@ def _kv_kwargs(cls, kv_cache: bool) -> dict:
     return {"fit_mode": "fit_with_cache"} if "fit_mode" in params else {}
 
 
+class _LabelEncoded:
+    """Wrap a booster that needs integer class labels (e.g. XGBoost).
+
+    Keeps the sklearn interface: ``fit``/``predict`` use the original string
+    labels, ``classes_`` stays sorted so it aligns with ``predict_proba`` columns.
+    """
+
+    def __init__(self, base):
+        self.base = base
+
+    def fit(self, X, y):
+        from sklearn.preprocessing import LabelEncoder
+        self.le_ = LabelEncoder().fit(y)
+        self.base.fit(X, self.le_.transform(y))
+        self.classes_ = self.le_.classes_
+        return self
+
+    def predict(self, X):
+        return self.le_.inverse_transform(self.base.predict(X))
+
+    def predict_proba(self, X):
+        return self.base.predict_proba(X)
+
+
 def make_model(kind: str = "auto", *, task: str = "classification", seed: int = 0,
                kv_cache: bool = False):
     """Return an unfitted sklearn-compatible estimator.
@@ -147,8 +171,25 @@ def make_model(kind: str = "auto", *, task: str = "classification", seed: int = 
                                       colsample_bytree=0.8, random_state=seed,
                                       verbose=-1)
         return lgb.LGBMRegressor(n_estimators=400, learning_rate=0.05, num_leaves=31,
-                                 subsample=0.8, colsample_bytree=0.8,
-                                 random_state=seed, verbose=-1)
+                                 subsample=0.8, colsample_bytree=0.8, random_state=seed,
+                                 verbose=-1)
+
+    if kind == "xgboost":
+        import xgboost as xgb
+        kw = dict(n_estimators=400, learning_rate=0.05, max_depth=6, subsample=0.8,
+                  colsample_bytree=0.8, random_state=seed, tree_method="hist",
+                  n_jobs=-1, verbosity=0)
+        if task == "classification":
+            return _LabelEncoded(xgb.XGBClassifier(**kw))
+        return xgb.XGBRegressor(**kw)
+
+    if kind == "catboost":
+        from catboost import CatBoostClassifier, CatBoostRegressor
+        # allow_writing_files=False: CatBoost must not litter a catboost_info/ dir
+        kw = dict(random_seed=seed, verbose=False, allow_writing_files=False)
+        if task == "classification":
+            return CatBoostClassifier(**kw)          # handles string labels natively
+        return CatBoostRegressor(**kw)
 
     if kind == "logistic":
         from sklearn.linear_model import LogisticRegression, RidgeCV

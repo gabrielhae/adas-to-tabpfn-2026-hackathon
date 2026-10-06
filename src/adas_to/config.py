@@ -98,6 +98,16 @@ ANALYSIS = {
 KEY_COLS = ["car_model", "dongle_id", "route_id", "clip_id"]
 GROUP_COL = "dongle_id"          # the driver key used for all group-disjoint splits
 
+# --- models shown side-by-side in the explorer (order preserved) -------------
+COMPARE_MODELS = ["tabpfn", "lightgbm", "xgboost", "catboost"]
+COMPARE_MODEL_LABELS = {
+    "tabpfn": "TabPFN",
+    "lightgbm": "LightGBM",
+    "xgboost": "XGBoost",
+    "catboost": "CatBoost",
+    "logistic": "Logistic",
+}
+
 # --- TabPFN ------------------------------------------------------------------
 TABPFN_TOKEN_ENV = "TABPFN_TOKEN"
 

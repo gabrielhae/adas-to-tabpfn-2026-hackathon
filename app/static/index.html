@@ -25,14 +25,16 @@
   .brand p{margin:4px 0 0;color:var(--muted);font-size:11px}
   .scorecard{padding:10px 16px 12px;border-bottom:1px solid var(--line);
              background:var(--panel2)}
-  .scorecard h3{margin:0 0 3px;font-size:10px;text-transform:uppercase;
+  .scorecard h3{margin:0 0 4px;font-size:10px;text-transform:uppercase;
                 letter-spacing:.6px;color:var(--muted)}
-  .scorecard .big{font-size:21px;font-weight:700;font-variant-numeric:tabular-nums;
-                  line-height:1.15}
-  .scorecard .big span{font-size:11px;font-weight:400;color:var(--muted)}
-  .scorecard .metrics{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:3px;
-                      font-size:11px;color:var(--muted)}
-  .scorecard .metrics b{color:var(--fg);font-variant-numeric:tabular-nums}
+  .scorerow{padding:5px 0;border-top:1px solid #1e252e}
+  .scorerow:first-of-type{border-top:none}
+  .sc-top{display:flex;justify-content:space-between;align-items:baseline}
+  .sc-name{font-size:12px;font-weight:600}
+  .sc-big{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+  .sc-big small{font-size:9px;font-weight:400;color:var(--muted);margin-left:3px}
+  .sc-sub{margin-top:1px;font-size:10px;color:var(--muted)}
+  .sc-sub b{color:var(--fg);font-variant-numeric:tabular-nums}
   .filters{padding:12px 16px;border-bottom:1px solid var(--line)}
   .filters label{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;
                  letter-spacing:.6px;margin:8px 0 3px}
@@ -122,6 +124,25 @@
   table.pr{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
   table.pr td{padding:3px 4px;border-bottom:1px solid #1e252e}
   table.pr td:last-child{text-align:right;font-variant-numeric:tabular-nums}
+  .predgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+            gap:8px;margin-top:8px}
+  .predcol{background:var(--panel2);border:1px solid var(--line);border-radius:6px;
+           padding:6px 8px;min-width:0}
+  .pc-name{display:flex;justify-content:space-between;gap:4px;font-size:10px;
+           text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+           margin-bottom:2px}
+  .pc-time{text-transform:none;letter-spacing:0;color:#6e7681;
+           font-variant-numeric:tabular-nums}
+  .pc-pred{font-size:12px;font-weight:600;margin-bottom:5px;
+           white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pbar{display:grid;grid-template-columns:1fr auto;column-gap:6px;align-items:center;
+        margin-bottom:3px}
+  .pbar-l{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pbar-v{font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .pbar-track{grid-column:1/3;height:4px;background:#22303f;border-radius:2px;
+              overflow:hidden;margin-top:1px}
+  .pbar-track>i{display:block;height:100%;background:#3d5a80}
+  .pbar.hl .pbar-track>i{background:var(--accent)}
   .bar{height:6px;background:#22303f;border-radius:3px;overflow:hidden}
   .bar > i{display:block;height:100%;background:var(--accent)}
   .tag{display:inline-block;font-size:9px;padding:1px 5px;border-radius:8px;
@@ -200,6 +221,10 @@
 <script>
 const $ = s => document.querySelector(s);
 const state = { clips: [], cur: null, tel: null, plots: [], filters: {} };
+const MODEL_LABELS = { tabpfn: 'TabPFN', lightgbm: 'LightGBM', xgboost: 'XGBoost',
+                       catboost: 'CatBoost', logistic: 'Logistic' };
+const mlabel = k => MODEL_LABELS[k] || k;
+let COMPARE_ORDER = ['tabpfn', 'lightgbm', 'xgboost', 'catboost'];
 
 /* ---------------- helpers ---------------- */
 const fmtNum = (v, d = 2) => (v === null || v === undefined || Number.isNaN(v)) ? '–' : (+v).toFixed(d);
@@ -499,42 +524,95 @@ async function loadClip(key) {
   if (d.labelled) runPredict(key);
 }
 
+function renderPredCol(d, secs) {
+  const time = `<span class="pc-time" title="${d.fit_ms ?? '?'} ms fit · ` +
+    `${d.predict_ms ?? '?'} ms predict${d.cached ? ' (cached)' : ''}">` +
+    `${secs.toFixed(2)}s</span>`;
+  let h = `<div class="pc-name">${mlabel(d.model)}${time}</div>`;
+  if (!d.available) {
+    return h + '<div class="muted" style="font-size:10px">unavailable</div>';
+  }
+  if (d.probabilities) {
+    const entries = Object.entries(d.probabilities);
+    const top = entries.reduce((a, e) => (e[1] > a[1] ? e : a), entries[0])[0];
+    const ok = top === d.actual;
+    h += `<div class="pc-pred">${top} ` +
+      `<span class="verdict ${ok ? 'ok' : 'bad'}">${ok ? '✓' : '✗'}</span></div>`;
+    const rows = [...entries].sort((a, b) => a[0].localeCompare(b[0]));
+    for (const [c, pr] of rows) {
+      const pct = pr * 100;
+      const tags = (c === d.actual) ? '<span class="tag act">✔</span>' : '';
+      h += `<div class="pbar${c === top ? ' hl' : ''}">
+        <div class="pbar-l">${c}${tags}</div>
+        <div class="pbar-v">${pct.toFixed(0)}%</div>
+        <div class="pbar-track"><i style="width:${pct.toFixed(1)}%"></i></div>
+      </div>`;
+    }
+  } else {
+    h += `<div class="pc-pred">${fmtNum(d.prediction, 2)}</div>`;
+  }
+  return h;
+}
+
+let predSeq = 0;
 async function runPredict(key) {
   const tgt = 'post_maneuver_type';
-  $('#predout').innerHTML = 'running…';
+  const p = key.split('/');
+  const base = `car_model=${encodeURIComponent(p[0])}&driver=${p[1]}` +
+               `&route=${p[2]}&clip_id=${p[3]}&target=${tgt}`;
+  const order = COMPARE_ORDER;
+  const seq = ++predSeq;               // drop stale results if the clip changed
   $('#modelname').textContent = '';
-  try {
-    const r = await fetch(`/api/predict?car_model=${encodeURIComponent(key.split('/')[0])}` +
-      `&driver=${key.split('/')[1]}&route=${key.split('/')[2]}&clip_id=${key.split('/')[3]}&target=${tgt}`);
-    if (!r.ok) { $('#predout').textContent = 'unavailable (' + r.status + ')'; return; }
-    const d = await r.json();
-    $('#modelname').textContent = `· ${d.model}`;
-    let html = `<div>target <b>${d.target}</b> · ${d.trained_on || 'leave-driver-out'}` +
-      `${d.n_train ? ` (n=${d.n_train})` : ''}</div>`;
-    if (d.probabilities) {
-      const entries = Object.entries(d.probabilities);
-      // display order is fixed alphabetical; `top` (the prediction) is still argmax
-      const top = entries.reduce((m, e) => (e[1] > m[1] ? e : m), entries[0])[0];
-      const rows = [...entries].sort((a, b) => a[0].localeCompare(b[0]));
-      const correct = top === d.actual;
-      html += `<div style="margin-top:6px">model predicts <b>${top}</b> ` +
-        `<span class="verdict ${correct ? 'ok' : 'bad'}">` +
-        `${correct ? '✓ correct' : '✗ wrong'}</span></div>`;
-      html += '<table class="pr">';
-      for (const [c, p] of rows) {
-        let tags = '';
-        if (c === top) tags += '<span class="tag pred">predicted</span>';
-        if (c === d.actual) tags += '<span class="tag act">actual ✔</span>';
-        html += `<tr><td>${c}${tags}</td><td>${(p*100).toFixed(1)}%</td></tr>
-                 <tr><td colspan="2"><div class="bar"><i style="width:${(p*100).toFixed(1)}%"></i></div></td></tr>`;
-      }
-      html += '</table>';
-    } else {
-      html += `<div>predicted <b>${fmtNum(d.prediction,3)}</b></div>`;
+
+  let html = `<div class="muted" style="font-size:11px" id="predmeta">` +
+    `target <b>${tgt}</b> · predicting…</div><div class="predgrid">`;
+  for (const k of order) {
+    html += `<div class="predcol" id="pc_${k}">
+      <div class="pc-name">${mlabel(k)}<span class="pc-time" id="pt_${k}">…</span></div>
+      <div class="muted" style="font-size:10px">queued</div></div>`;
+  }
+  $('#predout').innerHTML = html + '</div>';
+
+  const t0 = performance.now();
+  const tick = setInterval(() => {
+    const s = ((performance.now() - t0) / 1000).toFixed(1) + 's';
+    for (const k of order) {
+      const el = document.getElementById('pt_' + k);
+      if (el && !el.dataset.done) el.textContent = s;
     }
-    html += d.degenerate ? '<div class="warn">small training set — treat with caution</div>' : '';
-    $('#predout').innerHTML = html;
-  } catch (e) { $('#predout').textContent = 'error: ' + e; }
+  }, 100);
+
+  await Promise.all(order.map(async k => {
+    const t = performance.now();
+    const cell = () => document.getElementById('pc_' + k);
+    try {
+      const r = await fetch('/api/predict_one?' + base + '&model=' + encodeURIComponent(k));
+      const secs = (performance.now() - t) / 1000;
+      if (seq !== predSeq || !cell()) return;
+      cell().dataset.done = '1';
+      if (!r.ok) {
+        cell().innerHTML = `<div class="pc-name">${mlabel(k)}` +
+          `<span class="pc-time">${secs.toFixed(2)}s</span></div>` +
+          `<div class="muted" style="font-size:10px">unavailable (${r.status})</div>`;
+        return;
+      }
+      const d = await r.json();
+      cell().innerHTML = renderPredCol(d, secs);
+      const meta = document.getElementById('predmeta');
+      if (meta && !meta.dataset.done) {
+        meta.dataset.done = '1';
+        meta.innerHTML = `target <b>${d.target}</b> · ${d.trained_on}` +
+          ` (n=${d.n_train}) · actual <b>${d.actual}</b>`;
+        $('#modelname').textContent = `· ${d.n_train} train rows`;
+      }
+    } catch (e) {
+      if (seq === predSeq && cell()) {
+        cell().innerHTML = `<div class="pc-name">${mlabel(k)}</div>` +
+          `<div class="muted" style="font-size:10px">error</div>`;
+      }
+    }
+  }));
+  clearInterval(tick);
 }
 
 /* ---------------- filters / list ---------------- */
@@ -568,22 +646,30 @@ let SPLIT_SCOPE = '';
 
 function renderScore(s) {
   const el = $('#scorecard');
-  const c = s && s.classification;
-  if (!s || !s.available || !c) { el.style.display = 'none'; return; }
-  const reg = s.regression && s.regression.post_max_abs_steer_torque;
-  el.style.display = 'block';
-  el.innerHTML = `
-    <h3>Test-set score · ${s.model}</h3>
-    <div class="big">${(c.balanced_accuracy * 100).toFixed(1)}% <span>balanced acc</span></div>
-    <div class="metrics">
-      <span>macro F1 <b>${c.macro_f1.toFixed(3)}</b></span>
-      <span>acc <b>${c.accuracy.toFixed(3)}</b></span>
-      <span>chance <b>${c.chance.toFixed(2)}</b></span>
-    </div>
-    <div class="metrics">
-      <span>${s.n_test} clips · ${s.n_test_drivers} drivers</span>
-      ${reg ? `<span>steer R² <b>${reg.r2.toFixed(2)}</b></span>` : ''}
+  if (!s || !s.available || !s.models) { el.style.display = 'none'; return; }
+  const order = s.order || Object.keys(s.models);
+  const chance = order.map(k => s.models[k] && s.models[k].classification)
+                      .find(Boolean);
+  let rows = '';
+  for (const k of order) {
+    const m = s.models[k];
+    const c = m && m.available && m.classification;
+    if (!c) {
+      rows += `<div class="scorerow"><span class="sc-name">${mlabel(k)}</span>
+        <span class="muted" style="font-size:10px">unavailable</span></div>`;
+      continue;
+    }
+    const reg = m.regression && m.regression.post_max_abs_steer_torque;
+    rows += `<div class="scorerow">
+      <div class="sc-top"><span class="sc-name">${mlabel(k)}</span>
+        <span class="sc-big">${(c.balanced_accuracy * 100).toFixed(1)}<small>% bal-acc</small></span></div>
+      <div class="sc-sub">F1 <b>${c.macro_f1.toFixed(3)}</b> · acc <b>${c.accuracy.toFixed(3)}</b>${
+        reg ? ` · steer R² <b>${reg.r2.toFixed(2)}</b>` : ''}</div>
     </div>`;
+  }
+  el.style.display = 'block';
+  el.innerHTML = `<h3>Test-set scores · ${s.n_test} clips · chance ${
+    chance ? chance.chance.toFixed(2) : '–'}</h3>${rows}`;
 }
 
 let VIEW_TOTAL = 0;
@@ -594,6 +680,9 @@ async function boot() {
     fetch('/api/score').then(r => r.json()),
   ]);
   renderScore(sc);
+  if (mdl.available_models && mdl.available_models.length) {
+    COMPARE_ORDER = mdl.available_models;
+  }
   VIEW_TOTAL = fac.n_clips;
   SPLIT_SCOPE = (fac.split && fac.split.shown === 'test') ? 'test-split clips' : 'clips';
   $('#subtitle').textContent = `${SPLIT_SCOPE} · ${fac.n_labelled} labelled · TabPFN ${mdl.tabpfn_available ? 'ready' : 'needs token'}`;

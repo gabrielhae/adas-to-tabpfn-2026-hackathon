@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 import numpy as np
@@ -109,6 +110,18 @@ def _pyval(v):
     return v
 
 
+def _scalar(v):
+    """Reduce a numpy/array scalar (e.g. CatBoost's shape-(1,) output) to a plain
+    Python value FastAPI can serialise."""
+    if hasattr(v, "tolist"):
+        v = v.tolist()
+    elif hasattr(v, "item"):
+        v = v.item()
+    if isinstance(v, (list, tuple)) and len(v) == 1:
+        v = v[0]
+    return v
+
+
 def _row(key: str):
     m = VIEW[VIEW.key == key]
     if not len(m):
@@ -121,8 +134,7 @@ def _row(key: str):
 def api_model():
     ok, why = M.tabpfn_available()
     return {"tabpfn_available": ok, "reason": why,
-            "available_models": (["tabpfn", "lightgbm", "logistic"] if ok
-                                 else ["lightgbm", "logistic"]),
+            "available_models": list(C.COMPARE_MODELS),
             "headline_model": "tabpfn" if ok else "lightgbm",
             "split": SPLIT_INFO,
             "note": "TabPFN needs a one-time license acceptance; set TABPFN_TOKEN."}
@@ -256,11 +268,8 @@ def api_stats():
     return JSONResponse(out)
 
 
-@app.get("/api/predict")
-def api_predict(car_model: str, driver: str, route: str, clip_id: str,
-                target: str = "post_maneuver_type",
-                model_kind: str = "auto"):
-    """Fit on the train+val drivers, predict this held-out test clip. No leakage."""
+def _resolve_predict(car_model, driver, route, clip_id, target):
+    """Shared validation for the predict endpoints -> (key, mt, row, task)."""
     key = f"{car_model}/{driver}/{route}/{clip_id}"
     if not len(MODEL_TABLE):
         raise HTTPException(503, "model table unavailable")
@@ -272,8 +281,12 @@ def api_predict(car_model: str, driver: str, route: str, clip_id: str,
         raise HTTPException(404, "clip not in model table (no labels available)")
     if target not in SCHEMA.get("targets_regression", []) + [SCHEMA["target_classification"]]:
         raise HTTPException(400, f"unsupported target: {target}")
-
     task = "regression" if target in SCHEMA.get("targets_regression", []) else "classification"
+    return key, mt, row, task
+
+
+def _prepare_predict(mt, row, target, task):
+    """Build the encoded train/test matrices for one target."""
     if TRAIN_VAL_DRIVERS is not None:
         train = mt[mt.dongle_id.isin(TRAIN_VAL_DRIVERS)]
     else:
@@ -283,36 +296,97 @@ def api_predict(car_model: str, driver: str, route: str, clip_id: str,
     if task == "classification":
         ytr = M.collapse_rare(ytr, 10)
     Xtr, Xte = M.encode(P.X, M.prepare(row, SCHEMA, target).X, P.categorical)
+    return train, Xtr, ytr, Xte
 
-    if model_kind == "auto":
-        ok, _ = M.tabpfn_available()
-        model_kind = "tabpfn" if ok else "lightgbm"
+
+def _predict_model(kind, task, target, Xtr, ytr, Xte):
+    """Fit (or reuse) one model and predict one clip, timing fit vs predict."""
+    t0 = time.perf_counter()
+    cached = False
     if TRAIN_VAL_DRIVERS is not None:
         # constant training pool -> fit once, reuse across test clips (KV cache)
-        hit = _MODELS.get((target, model_kind))
+        hit = _MODELS.get((target, kind))
         if hit is None:
-            est = M.make_model(model_kind, task=task, kv_cache=True)
+            est = M.make_model(kind, task=task, kv_cache=True)
             est.fit(Xtr, ytr)
-            _MODELS[(target, model_kind)] = (est, list(Xtr.columns))
+            _MODELS[(target, kind)] = (est, list(Xtr.columns))
+            Xte_k = Xte
         else:
             est, cols = hit
-            Xte = Xte.reindex(columns=cols, fill_value=0.0)
+            Xte_k = Xte.reindex(columns=cols, fill_value=0.0)
+            cached = True
     else:
-        est = M.make_model(model_kind, task=task)
+        est = M.make_model(kind, task=task)
         est.fit(Xtr, ytr)
-    pred = est.predict(Xte)
-    resp = {"key": key, "target": target, "task": task, "model": model_kind,
-            "split": (SPLIT_INFO or {}).get("protocol"),
-            "trained_on": ("train+val" if TRAIN_VAL_DRIVERS is not None else "leave-driver-out"),
-            "n_train": int(len(train)),
-            "prediction": (pred[0].item() if hasattr(pred[0], "item") else pred[0]),
-            "degenerate": bool(len(train) < 100 or row.iloc[0].dongle_id
-                               not in mt.dongle_id.values)}
+        Xte_k = Xte
+    t1 = time.perf_counter()
+    pred = est.predict(Xte_k)
+    entry = {"available": True, "prediction": _scalar(pred[0])}
     if task == "classification" and hasattr(est, "predict_proba"):
-        pr = est.predict_proba(Xte)[0]
-        resp["probabilities"] = {str(c): float(p) for c, p in zip(est.classes_, pr)}
-        resp["actual"] = str(row.iloc[0][target])
-    return resp
+        pr = est.predict_proba(Xte_k)[0]
+        entry["probabilities"] = {str(c): float(p) for c, p in zip(est.classes_, pr)}
+    t2 = time.perf_counter()
+    entry["cached"] = cached
+    entry["fit_ms"] = round((t1 - t0) * 1000, 1)
+    entry["predict_ms"] = round((t2 - t1) * 1000, 1)
+    return entry
+
+
+@app.get("/api/predict")
+def api_predict(car_model: str, driver: str, route: str, clip_id: str,
+                target: str = "post_maneuver_type",
+                model_kind: str = "auto", models: str | None = None):
+    """Fit each model on the train+val drivers, predict this held-out test clip.
+
+    Returns one entry per model under ``models`` (identical probabilities shape),
+    so the explorer can show them side by side.
+    """
+    key, mt, row, task = _resolve_predict(car_model, driver, route, clip_id, target)
+    if models:
+        kinds = [m.strip() for m in models.split(",") if m.strip()]
+    elif model_kind and model_kind != "auto":
+        kinds = [model_kind]
+    else:
+        kinds = list(C.COMPARE_MODELS)
+
+    train, Xtr, ytr, Xte = _prepare_predict(mt, row, target, task)
+    out_models: dict = {}
+    for kind in kinds:
+        try:
+            out_models[kind] = _predict_model(kind, task, target, Xtr, ytr, Xte)
+        except Exception as e:
+            out_models[kind] = {"available": False,
+                                "error": f"{type(e).__name__}: {str(e)[:160]}"}
+
+    return {"key": key, "target": target, "task": task,
+            "split": (SPLIT_INFO or {}).get("protocol"),
+            "trained_on": ("train+val" if TRAIN_VAL_DRIVERS is not None
+                           else "leave-driver-out"),
+            "n_train": int(len(train)),
+            "order": kinds,
+            "actual": _scalar(row.iloc[0][target]),
+            "degenerate": bool(len(train) < 100),
+            "models": out_models}
+
+
+@app.get("/api/predict_one")
+def api_predict_one(car_model: str, driver: str, route: str, clip_id: str,
+                    model: str, target: str = "post_maneuver_type"):
+    """Single-model prediction, so the UI can fill each column as it lands."""
+    key, mt, row, task = _resolve_predict(car_model, driver, route, clip_id, target)
+    train, Xtr, ytr, Xte = _prepare_predict(mt, row, target, task)
+    try:
+        entry = _predict_model(model, task, target, Xtr, ytr, Xte)
+    except Exception as e:
+        entry = {"available": False, "error": f"{type(e).__name__}: {str(e)[:160]}"}
+    return {"key": key, "target": target, "task": task, "model": model,
+            "split": (SPLIT_INFO or {}).get("protocol"),
+            "trained_on": ("train+val" if TRAIN_VAL_DRIVERS is not None
+                           else "leave-driver-out"),
+            "n_train": int(len(train)),
+            "actual": _scalar(row.iloc[0][target]),
+            "degenerate": bool(len(train) < 100),
+            **entry}
 
 
 # ------------------------------------------------------------------ static
