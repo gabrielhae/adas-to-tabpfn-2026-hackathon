@@ -324,6 +324,26 @@ The group structure makes this essential: the 1,043 clips come from **208 driver
 | `brand` | `LeaveOneGroupOut()` over `brand` (21 folds) |
 | stratum | results also reported separately for `qlog` and `rlog` |
 
+#### Fixed train / validation / test split
+
+`scripts/build_splits.py` (see `src/adas_to/splits.py`) persists one deterministic
+**driver-disjoint** three-way split to `data/derived/splits.parquet`: every
+`dongle_id` is assigned to exactly one of `train` / `val` / `test`, balanced by
+**clip count** (not driver count) because driver sizes run 1–140 clips and the largest
+driver is 13.4% of the data. Fractions are 60 / 20 / 20; assignment is seed-stable
+(`SPLIT_SEED=0`).
+
+| split | drivers | rows | share |
+|---|---|---|---|
+| train | 126 | 625 | 0.599 |
+| val | 41 | 209 | 0.200 |
+| test | 41 | 209 | 0.200 |
+
+Protocol: fit on **train**, tune on **val**, report once on **test**. The explorer
+(`app/server.py`) is scoped to the **test** split only — `/api/index`, `/api/facets`,
+`/api/stats`, `/api/clip` and `/api/media` all return test clips, and `/api/predict`
+fits on train+val before predicting the held-out test clip.
+
 ### Preprocessing
 
 Fit on the training fold only, then applied to the test fold:
@@ -755,6 +775,13 @@ $env:TABPFN_TOKEN = "<your key>"
 
 The app reports readiness at `GET /api/model` and in the sidebar subtitle, and
 `/api/predict?model_kind=tabpfn` will use it. Until then `--models auto` falls back to LightGBM.
+
+**KV cache is enabled.** `make_model(..., kv_cache=True)` passes
+`fit_mode="fit_with_cache"` (TabPFN-3+; guarded by signature inspection, so older
+installs fall back silently). The explorer's train+val pool is fixed, so
+`/api/predict` fits once and caches the estimator per `(target, model_kind)`, and
+TabPFN reuses its training-side KV cache on every later call. Measured on the RTX
+3090: first call ~5.7 s (fit + cache build), subsequent calls ~0.7 s.
 
 GPU is ready: `torch 2.11.0+cu128`, RTX 3090, 24 GB, compute capability 8.6, CUDA 12.8.
 

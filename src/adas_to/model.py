@@ -7,6 +7,7 @@ pipeline runs today and upgrades transparently the moment a token is available.
 """
 from __future__ import annotations
 
+import inspect
 import os
 from dataclasses import dataclass
 
@@ -99,10 +100,28 @@ def encode(Xtr: pd.DataFrame, Xte: pd.DataFrame, cat: list[str]):
 # --------------------------------------------------------------------------- #
 # models
 # --------------------------------------------------------------------------- #
-def make_model(kind: str = "auto", *, task: str = "classification", seed: int = 0):
+def _kv_kwargs(cls, kv_cache: bool) -> dict:
+    """Add ``fit_mode='fit_with_cache'`` when the installed tabpfn supports it.
+
+    Caches the training-side attention state so repeated ``predict`` calls against
+    an unchanged training set skip recomputing it. TabPFN-3+ only.
+    """
+    if not kv_cache:
+        return {}
+    try:
+        params = inspect.signature(cls.__init__).parameters
+    except (TypeError, ValueError):
+        return {}
+    return {"fit_mode": "fit_with_cache"} if "fit_mode" in params else {}
+
+
+def make_model(kind: str = "auto", *, task: str = "classification", seed: int = 0,
+               kv_cache: bool = False):
     """Return an unfitted sklearn-compatible estimator.
 
     kind: 'tabpfn' | 'lightgbm' | 'logistic' | 'auto'
+    kv_cache: enable TabPFN ``fit_with_cache`` (reuse when re-predicting against
+              the same training set). Ignored by the non-tabpfn models.
     """
     if kind == "auto":
         ok, _ = tabpfn_available()
@@ -115,8 +134,10 @@ def make_model(kind: str = "auto", *, task: str = "classification", seed: int = 
             os.environ["TABPFN_TOKEN"] = tok
         if task == "classification":
             return TabPFNClassifier(device="auto", random_state=seed,
-                                    balance_probabilities=True)
-        return TabPFNRegressor(device="auto", random_state=seed)
+                                    balance_probabilities=True,
+                                    **_kv_kwargs(TabPFNClassifier, kv_cache))
+        return TabPFNRegressor(device="auto", random_state=seed,
+                               **_kv_kwargs(TabPFNRegressor, kv_cache))
 
     if kind == "lightgbm":
         import lightgbm as lgb

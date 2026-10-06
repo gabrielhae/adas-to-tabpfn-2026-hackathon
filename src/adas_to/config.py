@@ -35,6 +35,13 @@ SCHEMA_JSON = DERIVED / "schema.json"
 FORECAST_TABLE = DERIVED / "forecast_table.parquet"
 FORECAST_SCHEMA = DERIVED / "forecast_schema.json"
 
+# --- train / validation / test split ----------------------------------------
+# Driver-disjoint (the paper's stated protocol). See src/adas_to/splits.py.
+SPLIT_ASSIGNMENTS = DERIVED / "splits.parquet"   # dongle_id -> split
+SPLIT_META = DERIVED / "split_meta.json"         # summary written by build_splits.py
+SPLIT_FRACTIONS = {"train": 0.6, "val": 0.2, "test": 0.2}
+SPLIT_SEED = 0
+
 # --- vision (YOLOv8n structured geometry) -----------------------------------
 VISION_FRAMES = DERIVED / "vision_frames.parquet"
 VISION_FRAMES_CSV = DERIVED / "vision_frames.csv"
@@ -88,6 +95,7 @@ ANALYSIS = {
 }
 
 KEY_COLS = ["car_model", "dongle_id", "route_id", "clip_id"]
+GROUP_COL = "dongle_id"          # the driver key used for all group-disjoint splits
 
 # --- TabPFN ------------------------------------------------------------------
 TABPFN_TOKEN_ENV = "TABPFN_TOKEN"

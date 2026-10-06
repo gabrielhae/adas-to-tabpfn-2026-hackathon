@@ -114,6 +114,13 @@
   table.pr td:last-child{text-align:right;font-variant-numeric:tabular-nums}
   .bar{height:6px;background:#22303f;border-radius:3px;overflow:hidden}
   .bar > i{display:block;height:100%;background:var(--accent)}
+  .tag{display:inline-block;font-size:9px;padding:1px 5px;border-radius:8px;
+       margin-left:4px;vertical-align:middle}
+  .tag.pred{background:#1f6feb;color:#fff}
+  .tag.act{background:#2b2413;color:#e3b341;border:1px solid #5c4a1a}
+  .verdict{font-weight:600}
+  .verdict.ok{color:var(--ok)}
+  .verdict.bad{color:var(--danger)}
   #loading{padding:20px;color:var(--muted)}
 </style>
 </head>
@@ -491,17 +498,24 @@ async function runPredict(key) {
     if (!r.ok) { $('#predout').textContent = 'unavailable (' + r.status + ')'; return; }
     const d = await r.json();
     $('#modelname').textContent = `· ${d.model}`;
-    let html = `<div>target <b>${d.target}</b> · leave-driver-out</div>`;
+    let html = `<div>target <b>${d.target}</b> · ${d.trained_on || 'leave-driver-out'}` +
+      `${d.n_train ? ` (n=${d.n_train})` : ''}</div>`;
     if (d.probabilities) {
       const rows = Object.entries(d.probabilities).sort((a, b) => b[1] - a[1]);
+      const top = rows[0][0];
+      const correct = top === d.actual;
+      html += `<div style="margin-top:6px">model predicts <b>${top}</b> ` +
+        `<span class="verdict ${correct ? 'ok' : 'bad'}">` +
+        `${correct ? '✓ correct' : '✗ wrong'}</span></div>`;
       html += '<table class="pr">';
       for (const [c, p] of rows) {
-        const mark = (c === d.actual) ? ' ✔' : '';
-        html += `<tr><td>${c}${mark}</td><td>${(p*100).toFixed(1)}%</td></tr>
+        let tags = '';
+        if (c === top) tags += '<span class="tag pred">predicted</span>';
+        if (c === d.actual) tags += '<span class="tag act">actual ✔</span>';
+        html += `<tr><td>${c}${tags}</td><td>${(p*100).toFixed(1)}%</td></tr>
                  <tr><td colspan="2"><div class="bar"><i style="width:${(p*100).toFixed(1)}%"></i></div></td></tr>`;
       }
       html += '</table>';
-      html += `<div class="muted" style="margin-top:6px">actual: <b>${d.actual}</b></div>`;
     } else {
       html += `<div>predicted <b>${fmtNum(d.prediction,3)}</b></div>`;
     }
@@ -544,7 +558,8 @@ async function boot() {
     fetch('/api/model').then(r => r.json()),
   ]);
   VIEW_TOTAL = fac.n_clips;
-  $('#subtitle').textContent = `${fac.n_clips} clips · ${fac.n_labelled} labelled · TabPFN ${mdl.tabpfn_available ? 'ready' : 'needs token'}`;
+  const scope = (fac.split && fac.split.shown === 'test') ? 'test split' : 'all clips';
+  $('#subtitle').textContent = `${scope} · ${fac.n_clips} clips · ${fac.n_labelled} labelled · TabPFN ${mdl.tabpfn_available ? 'ready' : 'needs token'}`;
   opts('#f_brand', fac.brand, 'brands');
   opts('#f_trigger', fac.primary_trigger, 'triggers');
   opts('#f_log', fac.log_kind, 'log kinds');

@@ -27,6 +27,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from adas_to import config as C
 from adas_to import model as M
+from adas_to import splits as S
 from adas_to.telemetry import build_clip_telemetry
 
 app = FastAPI(title="ADAS-TO Explorer")
@@ -51,7 +52,40 @@ if len(MODEL_TABLE):
 
 VIEW = IDX.merge(LABELS, on="key", how="left") if LABELS is not None else IDX
 
+# ---- train/val/test split: the explorer shows the held-out TEST clips only ----
+# Split is driver-disjoint (dongle_id), built by scripts/build_splits.py.
+_ASSIGN = S.load_assignments()
+_SPLIT_GROUPS = S.split_groups(_ASSIGN) if _ASSIGN is not None else None
+TRAIN_VAL_DRIVERS: set | None = None
+SPLIT_INFO: dict | None = None
+_ALL_CLIPS = VIEW
+
+if _SPLIT_GROUPS is not None and len(MODEL_TABLE):
+    S.assert_disjoint(_ASSIGN)
+    mt_key = (MODEL_TABLE.car_model + "/" + MODEL_TABLE.driver + "/"
+              + MODEL_TABLE.route + "/" + MODEL_TABLE.clip_id_pub.astype(str))
+    test_keys = set(mt_key[MODEL_TABLE.dongle_id.isin(_SPLIT_GROUPS["test"])])
+    VIEW = VIEW[VIEW.key.isin(test_keys)].copy()
+    TRAIN_VAL_DRIVERS = _SPLIT_GROUPS["train"] | _SPLIT_GROUPS["val"]
+    SPLIT_INFO = {
+        "protocol": "driver-disjoint (dongle_id)",
+        "shown": "test",
+        "n_test_drivers": len(_SPLIT_GROUPS["test"]),
+        "n_test_clips": int(len(VIEW)),
+        "n_train_val_drivers": len(TRAIN_VAL_DRIVERS),
+    }
+    if C.SPLIT_META.exists():
+        SPLIT_INFO["meta"] = json.loads(C.SPLIT_META.read_text(encoding="utf-8"))
+else:  # no split file yet -> show everything, fit leave-driver-out (legacy)
+    SPLIT_INFO = {"protocol": "none (run scripts/build_splits.py)", "shown": "all",
+                  "n_test_clips": int(len(VIEW))}
+
 _CACHE: dict[str, dict] = {}
+
+# Fitted-model cache. With a fixed train+val pool the estimator is identical for
+# every test clip, so fit once and reuse; TabPFN reuses its KV cache across the
+# repeated predict/predict_proba calls. Keyed by (target, model_kind).
+_MODELS: dict = {}
 
 
 def _pyval(v):
@@ -90,6 +124,7 @@ def api_model():
             "available_models": (["tabpfn", "lightgbm", "logistic"] if ok
                                  else ["lightgbm", "logistic"]),
             "headline_model": "tabpfn" if ok else "lightgbm",
+            "split": SPLIT_INFO,
             "note": "TabPFN needs a one-time license acceptance; set TABPFN_TOKEN."}
 
 
@@ -130,7 +165,9 @@ def api_facets():
             "powertrain": vc("powertrain"),
             "car_model": {str(k): int(v) for k, v in models.head(60).items()},
             "n_clips": int(len(VIEW)),
-            "n_labelled": int(VIEW.primary_trigger.notna().sum())}
+            "n_labelled": int(VIEW.primary_trigger.notna().sum()),
+            "n_total": int(len(_ALL_CLIPS)),
+            "split": SPLIT_INFO}
 
 
 @app.get("/api/clip/{car_model}/{driver}/{route}/{clip_id}")
@@ -198,6 +235,8 @@ def api_stats():
         out["brand"] = d.brand.value_counts(dropna=True).head(25).to_dict()
     if len(MODEL_TABLE):
         mt = MODEL_TABLE
+        if _SPLIT_GROUPS is not None:
+            mt = mt[mt.dongle_id.isin(_SPLIT_GROUPS["test"])]
         num = [c for c in ["risk_score", "maneuver_score", "speed_mps",
                            "post_max_abs_steer_torque"] if c in mt.columns]
         if num:
@@ -210,7 +249,7 @@ def api_stats():
 def api_predict(car_model: str, driver: str, route: str, clip_id: str,
                 target: str = "post_maneuver_type",
                 model_kind: str = "auto"):
-    """Fit on all other drivers, predict this clip. Leave-driver-out, no leakage."""
+    """Fit on the train+val drivers, predict this held-out test clip. No leakage."""
     key = f"{car_model}/{driver}/{route}/{clip_id}"
     if not len(MODEL_TABLE):
         raise HTTPException(503, "model table unavailable")
@@ -224,7 +263,10 @@ def api_predict(car_model: str, driver: str, route: str, clip_id: str,
         raise HTTPException(400, f"unsupported target: {target}")
 
     task = "regression" if target in SCHEMA.get("targets_regression", []) else "classification"
-    train = mt[mt.dongle_id != row.iloc[0].dongle_id]
+    if TRAIN_VAL_DRIVERS is not None:
+        train = mt[mt.dongle_id.isin(TRAIN_VAL_DRIVERS)]
+    else:
+        train = mt[mt.dongle_id != row.iloc[0].dongle_id]
     P = M.prepare(train, SCHEMA, target)
     ytr = P.y if task == "classification" else pd.to_numeric(P.y, errors="coerce")
     if task == "classification":
@@ -234,10 +276,24 @@ def api_predict(car_model: str, driver: str, route: str, clip_id: str,
     if model_kind == "auto":
         ok, _ = M.tabpfn_available()
         model_kind = "tabpfn" if ok else "lightgbm"
-    est = M.make_model(model_kind, task=task)
-    est.fit(Xtr, ytr)
+    if TRAIN_VAL_DRIVERS is not None:
+        # constant training pool -> fit once, reuse across test clips (KV cache)
+        hit = _MODELS.get((target, model_kind))
+        if hit is None:
+            est = M.make_model(model_kind, task=task, kv_cache=True)
+            est.fit(Xtr, ytr)
+            _MODELS[(target, model_kind)] = (est, list(Xtr.columns))
+        else:
+            est, cols = hit
+            Xte = Xte.reindex(columns=cols, fill_value=0.0)
+    else:
+        est = M.make_model(model_kind, task=task)
+        est.fit(Xtr, ytr)
     pred = est.predict(Xte)
     resp = {"key": key, "target": target, "task": task, "model": model_kind,
+            "split": (SPLIT_INFO or {}).get("protocol"),
+            "trained_on": ("train+val" if TRAIN_VAL_DRIVERS is not None else "leave-driver-out"),
+            "n_train": int(len(train)),
             "prediction": (pred[0].item() if hasattr(pred[0], "item") else pred[0]),
             "degenerate": bool(len(train) < 100 or row.iloc[0].dongle_id
                                not in mt.dongle_id.values)}
