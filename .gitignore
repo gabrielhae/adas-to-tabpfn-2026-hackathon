@@ -8,3 +8,6 @@ ADAS-TO/
 results/server.*
 *.pptx
 .kilo/plans/
+*.ps1
+arx.py
+chk.py
